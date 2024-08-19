@@ -1,4 +1,5 @@
 {
+  "homepage": "http://BenWalker01.github.io/vatsim-replay-map",
   "name": "vatsim-replay-map",
   "version": "0.1.0",
   "private": true,
@@ -25,6 +26,8 @@
   },
   "scripts": {
     "start": "react-scripts start",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d build",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
@@ -49,6 +52,7 @@
   },
   "devDependencies": {
     "@types/lodash": "^4.17.7",
-    "@types/react-slider": "^1.3.6"
+    "@types/react-slider": "^1.3.6",
+    "gh-pages": "^6.1.1"
   }
 }
