@@ -1,3 +1,5 @@
+import L from "leaflet"
+
 export const douglasPeucker = (points: { lat: number, lng: number, alt: number }[], epsilon: number) => {
     if (points.length < 3) return points;
   
@@ -39,3 +41,32 @@ export const getColourByAlt = (alt: number) => {
     const blue = Math.min(255, Math.floor(255 * (1 - ratio)));
     return `rgb(${red}, 0, ${blue})`;
   };
+
+export const generateCircle = (lat: number, lng: number, col: string, callsign: string) => {
+    const circle = L.circle([lat, lng], {
+        color: col,
+        fillColor: col,
+        fillOpacity: 0.5,
+        radius: 750
+    });
+    circle.bindTooltip(callsign, { permanent: false, direction: 'top' });
+    return circle;
+};
+export const hashString = (str: string): number => {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = (hash << 5) - hash + char;
+      hash |= 0; // Convert to 32bit integer
+  }
+  return hash;
+};
+
+export const getColorFromHash = (hash: number): string => {
+  const letters = '0123456789ABCDEF';
+  let color = '#';
+  for (let i = 0; i < 6; i++) {
+      color += letters[(hash >> (i * 4)) & 0xF];
+  }
+  return color;
+};

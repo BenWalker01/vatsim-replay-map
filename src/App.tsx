@@ -3,15 +3,14 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Layer, polyline, Map } from 'leaflet';
 import MapComponent from './MapComponent';
 import FileUploader from './FileUploader';
-import { douglasPeucker, getColourByAlt } from './utils';
+import { douglasPeucker, getColourByAlt, generateCircle, hashString, getColorFromHash } from './utils';
 import ReactSlider from "react-slider";
 import debounce from "lodash/debounce"
-import L from "leaflet"
-import planeSvg from "./plane.svg"
 
 
 const App: React.FC = () => {
     const [fileData, setFileData] = useState<{ [fileName: string]: any }>({});
+    const [replayPath, setFilePath] = useState<{ [offset: number]: { [callsign: string]: { lat: number, lng: number, currentlyWith: string } } }>({});
     const [fileVisibility, setFileVisibility] = useState<{ [fileName: string]: boolean }>({});
     const [drawnLayers, setDrawnLayers] = useState<{ [fileName: string]: Layer[] }>({});
     const [leafletMap, setLeafletMap] = useState<Map | null>(null);
@@ -22,14 +21,14 @@ const App: React.FC = () => {
     const [isPaused, setIsPaused] = useState(false);
     const [pauseStartTime, setPauseStartTime] = useState<Date | null>(null);
     const [remainingTime, setRemainingTime] = useState(0);
-    const [coords, setCoords] = useState<{ [key: string]: { lat: number, lng: number, alt: number, offset: number }[] }>({});
+    const [coords, setCoords] = useState<{ [key: string]: { lat: number, lng: number, alt: number }[] }>({});
     const [speed, setSpeed] = useState(1);
-    const markersRef = useRef<Array<[string, L.Marker<any>]>>([]);
+    const [seenAtcos] = useState<{ [key: string]: string }>({});
     const circlesRef = useRef<Array<[string, L.Circle<any>]>>([]);
     const prevCoordsRef = useRef<{ [key: string]: { lat: number, lng: number } }>({});
 
 
-    const drawLines = useCallback((callsignData: { [key: string]: { lat: number, lng: number, alt: number, offset: number }[] }, fileName: string) => {
+    const drawLines = useCallback((callsignData: { [key: string]: { lat: number, lng: number, alt: number }[] }, fileName: string) => {
         if (!leafletMap) return;
 
         setDrawnLayers(prevLayers => {
@@ -44,7 +43,7 @@ const App: React.FC = () => {
 
         const newLayers: Layer[] = [];
         Object.keys(callsignData).forEach(callsign => {
-            const coords = callsignData[callsign].map(({ lat, lng, alt, offset }) => ({ lat, lng, alt, offset }));
+            const coords = callsignData[callsign].map(({ lat, lng, alt }) => ({ lat, lng, alt }));
             setCoords(prevCoords => ({ ...prevCoords, [callsign]: coords }));
             const simplifiedCoords = douglasPeucker(coords, 0.001); // Adjust epsilon as needed
 
@@ -58,8 +57,6 @@ const App: React.FC = () => {
                 line.addTo(leafletMap);
                 newLayers.push(line);
             }
-
-
         });
 
         setDrawnLayers(prevLayers => ({ ...prevLayers, [fileName]: newLayers }));
@@ -79,15 +76,6 @@ const App: React.FC = () => {
             ...prevVisibility,
             [fileName]: !prevVisibility[fileName]
         }));
-    };
-
-    const createSvgMarker = (lat: number, lng: number) => {
-        const icon = L.divIcon({
-            html: `<img src="${planeSvg}" style="width: 24px; height: 24px; filter: hue-rotate(90deg) saturate(1000%);" />`,
-            className: '',
-            iconSize: [24, 24],
-        });
-        return L.marker([lat, lng], { icon });
     };
 
     const handlePlayClick = () => {
@@ -134,14 +122,6 @@ const App: React.FC = () => {
             }
         }
     };
-    const drawGreenCircle = (lat: number, lng: number) => {
-        return L.circle([lat, lng], {
-            color: 'green',
-            fillColor: 'green',
-            fillOpacity: 0.5,
-            radius: 1000
-        });
-    };
 
     const handleIncreaseSpeed = () => {
         setSpeed(prevSpeed => prevSpeed + 1)
@@ -159,65 +139,8 @@ const App: React.FC = () => {
     }, [intervalId]);
 
     useEffect(() => {
-        const newMarkersBuffer: Array<[string, L.Marker<any>]> = [];
-        const newCirclesBuffer: Array<[string, L.Circle<any>]> = [];
-        const movedCallsigns: Set<string> = new Set();
-
-        Object.keys(coords).forEach(callsign => {
-            const callsignCoords = coords[callsign];
-            const matchingCoord = callsignCoords.find(coord => coord.offset === counter);
-            if (matchingCoord) {
-                const prevCoord = prevCoordsRef.current[callsign];
-                if (!prevCoord || prevCoord.lat !== matchingCoord.lat || prevCoord.lng !== matchingCoord.lng) {
-                    console.log(`Adding marker for callsign: ${callsign} at Lat: ${matchingCoord.lat}, Lng: ${matchingCoord.lng}`);
-
-                    movedCallsigns.add(callsign);
-                    const marker = createSvgMarker(matchingCoord.lat, matchingCoord.lng);
-                    newMarkersBuffer.push([callsign, marker]);
-
-                    const circle = drawGreenCircle(matchingCoord.lat, matchingCoord.lng);
-                    newCirclesBuffer.push([callsign, circle]);
-
-                    prevCoordsRef.current[callsign] = { lat: matchingCoord.lat, lng: matchingCoord.lng };
-
-                    console.log("Added plane: ", callsign);
-                }
-            }
-        });
-
-        if (movedCallsigns.size > 0) {
-            console.log("Drawn new planes. Removing old planes");
-
-            // Remove only the markers and circles for the moved callsigns
-            markersRef.current = markersRef.current.filter(marker => {
-                if (movedCallsigns.has(marker[0])) {
-                    marker[1].remove();
-                    return false;
-                }
-                return true;
-            });
-
-            circlesRef.current = circlesRef.current.filter(circle => {
-                if (movedCallsigns.has(circle[0])) {
-                    circle[1].remove();
-                    return false;
-                }
-                return true;
-            });
-
-            // Add new markers and circles from buffer to the main arrays
-            if (leafletMap) {
-                newMarkersBuffer.forEach(marker => {
-                    marker[1].addTo(leafletMap);
-                    markersRef.current.push(marker);
-                });
-                newCirclesBuffer.forEach(circle => {
-                    circle[1].addTo(leafletMap);
-                    circlesRef.current.push(circle);
-                });
-            }
-        }
-    }, [counter, coords, leafletMap]);
+        //TODO
+    }, []);
 
 
 
