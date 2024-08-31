@@ -1,16 +1,16 @@
 import './App.css';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { Layer, polyline, Map } from 'leaflet';
+import { Layer, polyline, Map, circle, LatLng, LatLngExpression } from 'leaflet';
 import MapComponent from './MapComponent';
 import FileUploader from './FileUploader';
-import { douglasPeucker, getColourByAlt, generateCircle, hashString, getColorFromHash } from './utils';
+import { douglasPeucker, getColourByAlt, findNextCallsignOffset, generateCircle } from './utils';
 import ReactSlider from "react-slider";
-import debounce from "lodash/debounce"
+import debounce from "lodash/debounce";
+import * as d3 from 'd3';
 
 
 const App: React.FC = () => {
     const [fileData, setFileData] = useState<{ [fileName: string]: any }>({});
-    const [replayPath, setFilePath] = useState<{ [offset: number]: { [callsign: string]: { lat: number, lng: number, currentlyWith: string } } }>({});
     const [fileVisibility, setFileVisibility] = useState<{ [fileName: string]: boolean }>({});
     const [drawnLayers, setDrawnLayers] = useState<{ [fileName: string]: Layer[] }>({});
     const [leafletMap, setLeafletMap] = useState<Map | null>(null);
@@ -23,10 +23,7 @@ const App: React.FC = () => {
     const [remainingTime, setRemainingTime] = useState(0);
     const [coords, setCoords] = useState<{ [key: string]: { lat: number, lng: number, alt: number }[] }>({});
     const [speed, setSpeed] = useState(1);
-    const [seenAtcos] = useState<{ [key: string]: string }>({});
-    const circlesRef = useRef<Array<[string, L.Circle<any>]>>([]);
-    const prevCoordsRef = useRef<{ [key: string]: { lat: number, lng: number } }>({});
-
+    const [replayLog, setReplayLog] = useState<{ [fileName: string]: { [callsign: string]: { coords: [[lat: number, lng: number]], delay: number, colours: [string] } } }>({});
 
     const drawLines = useCallback((callsignData: { [key: string]: { lat: number, lng: number, alt: number }[] }, fileName: string) => {
         if (!leafletMap) return;
@@ -62,8 +59,9 @@ const App: React.FC = () => {
         setDrawnLayers(prevLayers => ({ ...prevLayers, [fileName]: newLayers }));
     }, [leafletMap, fileVisibility, setDrawnLayers]);
 
-    const handleFileParsed = (data: { [fileName: string]: any }) => {
+    const handleFileParsed = (data: { [fileName: string]: any }, replayLogs: { [fileName: string]: any }) => {
         setFileData(prevData => ({ ...prevData, ...data }));
+        setReplayLog(prevLogs => ({ ...prevLogs, ...replayLogs }));
         const newVisibility = Object.keys(data).reduce((acc, fileName) => {
             acc[fileName] = true;
             return acc;
@@ -139,8 +137,59 @@ const App: React.FC = () => {
     }, [intervalId]);
 
     useEffect(() => {
-        //TODO
-    }, []);
+
+
+        const initializeAndAnimateDot = (coords: number[][], delay: number, colours: string[]) => {
+            setTimeout(() => {
+                const [startLat, startLng] = coords[0];
+                if (leafletMap) {
+                    const movingCircle = circle([startLat, startLng], { radius: 500, color: colours[0] }).addTo(leafletMap);
+                    let index = 0;
+                    let startTime: number | null = null;
+                    const duration = 250; // Duration to move between points in milliseconds
+
+                    const animate = (timestamp: number) => {
+                        if (!startTime) startTime = timestamp;
+                        const elapsed = timestamp - startTime;
+
+                        const [startLat, startLng] = coords[index];
+                        const [endLat, endLng] = coords[(index + 1) % coords.length];
+
+                        const t = Math.min(elapsed / duration, 1); // Normalize elapsed time to [0, 1]
+                        const currentLat = startLat + (endLat - startLat) * t;
+                        const currentLng = startLng + (endLng - startLng) * t;
+
+                        movingCircle.setLatLng([currentLat, currentLng]);
+
+                        if (t < 1) {
+                            requestAnimationFrame(animate);
+                        } else {
+                            index++;
+                            if (index < coords.length - 1) {
+                                startTime = null;
+                                movingCircle.setStyle({ color: colours[index] });
+                                requestAnimationFrame(animate);
+                            } else {
+                                if (leafletMap) {
+                                    leafletMap.removeLayer(movingCircle);
+                                }
+                            }
+                        }
+                    };
+
+                    requestAnimationFrame(animate);
+                }
+            }, delay);
+        };
+
+        Object.keys(replayLog).forEach(fileName => {
+            const callsigns = replayLog[fileName];
+            Object.values(callsigns).forEach(({ coords, delay, colours }) => {
+                initializeAndAnimateDot(coords, delay, colours);
+            });
+        });
+    }, [leafletMap, replayLog]);
+
 
 
 

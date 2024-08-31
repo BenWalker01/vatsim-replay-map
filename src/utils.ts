@@ -62,11 +62,23 @@ export const hashString = (str: string): number => {
   return hash;
 };
 
-export const getColorFromHash = (hash: number): string => {
+export const getColorFromAtc = (atco: string): string => {
+  const hash = hashString(atco)
   const letters = '0123456789ABCDEF';
   let color = '#';
   for (let i = 0; i < 6; i++) {
       color += letters[(hash >> (i * 4)) & 0xF];
   }
   return color;
+};
+
+export const findNextCallsignOffset = (callsign: string, replayLog: { [fileName: string]: any[] }, counter: number) => {
+  for (let i = counter + 1; i < Object.keys(replayLog).length; i++) {
+      for (const fileName in replayLog) {
+          if (replayLog[fileName][i] && replayLog[fileName][i].callsign === callsign) {
+              return i;
+          }
+      }
+  }
+  return -1; // Return -1 if the callsign is not found
 };
