@@ -52,6 +52,7 @@ export const generateCircle = (lat: number, lng: number, col: string, callsign: 
     circle.bindTooltip(callsign, { permanent: false, direction: 'top' });
     return circle;
 };
+
 export const hashString = (str: string): number => {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
