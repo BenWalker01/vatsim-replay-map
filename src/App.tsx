@@ -14,6 +14,9 @@ const App: React.FC = () => {
     const [speed, setSpeed] = useState(1);
     const [fileName, setFileName] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const [planesVisible, setPlanesVisible] = useState(true);
+    const [tracksVisible, setTracksVisible] = useState(false);
+
 
     const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -121,7 +124,6 @@ const App: React.FC = () => {
             <header className="header">
                 <h1>VATSIM Replay Map</h1>
                 <nav>
-                    <div className="nav-title">File Visibility</div>
                     <div className="file-upload-container">
                         <input
                             type="file"
@@ -146,33 +148,65 @@ const App: React.FC = () => {
 
             <footer className="toolbar">
                 <div className="replay-system">
-                    <button onClick={() => setIsPlaying(!isPlaying)}>
-                        {isPlaying ? 'Pause' : 'Play'}
-                    </button>
-                    <button onClick={() => setSpeed((prevSpeed: number) => Math.max(0.5, prevSpeed / 2))}>
-                        -
-                    </button>
-                    <button onClick={() => setSpeed(1)}>
-                        {speed}x
-                    </button>
-                    <button onClick={() => setSpeed(prevSpeed => prevSpeed * 2)}>
-                        +
-                    </button>
-                </div>
-                <div className="slider-container">
-                    <ReactSlider
-                        className="horizontal-slider"
-                        thumbClassName="example-thumb"
-                        trackClassName="example-track"
-                        defaultValue={[0, 660]}
-                        ariaLabel={["lower", "upper"]}
-                        ariaValuetext={state => `Thumb value ${state.valueNow}`}
-                        pearling
-                        minDistance={10}
-                    />
-                    <div className="slider-values">
-                        <span>0</span>
-                        <span>660</span>
+                    <div className="playback-controls">
+                        <button onClick={() => setIsPlaying(!isPlaying)}>
+                            {isPlaying ? 'Pause' : 'Play'}
+                        </button>
+                        <button onClick={() => setSpeed((prevSpeed: number) => Math.max(0.5, prevSpeed / 2))}>
+                            -
+                        </button>
+                        <button onClick={() => setSpeed(1)}>
+                            {speed}x
+                        </button>
+                        <button onClick={() => setSpeed(prevSpeed => prevSpeed * 2)}>
+                            +
+                        </button>
+                    </div>
+
+                    <div className="visibility-controls">
+                        <label className="checkbox-label">
+                            <input
+                                type="checkbox"
+                                checked={planesVisible}
+                                onChange={() => {
+                                    const newVisibility = !planesVisible;
+                                    setPlanesVisible(newVisibility);
+                                    dots.forEach(dot => dot.setVisible(newVisibility));
+                                }}
+                            />
+                            Display Planes
+                        </label>
+
+                        <label className="checkbox-label">
+                            <input
+                                type="checkbox"
+                                checked={tracksVisible}
+                                onChange={() => {
+                                    const newVisibility = !tracksVisible;
+                                    setTracksVisible(newVisibility);
+                                    // Implement track visibility logic here
+                                    console.log(tracksVisible)
+                                }}
+                            />
+                            Display Tracks
+                        </label>
+                    </div>
+
+                    <div className="slider-container">
+                        <ReactSlider
+                            className="horizontal-slider"
+                            thumbClassName="example-thumb"
+                            trackClassName="example-track"
+                            defaultValue={[0, 660]}
+                            ariaLabel={["lower", "upper"]}
+                            ariaValuetext={state => `Thumb value ${state.valueNow}`}
+                            pearling
+                            minDistance={10}
+                        />
+                        <div className="slider-values">
+                            <span>0</span>
+                            <span>660</span>
+                        </div>
                     </div>
                 </div>
             </footer>
