@@ -34,7 +34,7 @@ class Dot {
         this.position = position;
         this.options = {
             color: options.color || '#3388ff',
-            radius: options.radius || 5,
+            radius: options.radius || 3,
             fillOpacity: options.fillOpacity || 0.8,
             weight: options.weight || 1,
             callsign: options.callsign,
