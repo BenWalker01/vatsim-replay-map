@@ -164,6 +164,8 @@ class Dot {
                     this.updateOptions(finalOptions);
                 }
 
+                this.setVisible(false);
+
                 this.animationId = null;
 
                 if (onComplete) {
