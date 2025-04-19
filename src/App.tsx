@@ -35,16 +35,24 @@ const App: React.FC = () => {
                 }
             ).draw();
 
+            // Hide the dot initially if it has a non-zero start time
+            // This is a backup in case the dot appears before animation starts
+            if (newDot.getMarker()) {
+                newDot.setVisible(false);
+            }
+
             // Set a timeline of positions with timestamps
             newDot.setPositions([
-                { lat: 51.505, lng: -0.09, time: 0, altitude: 0, heading: 0 },
+                { lat: 51.505, lng: -0.09, time: 2500, altitude: 0, heading: 0 },
                 { lat: 51.51, lng: -0.10, time: 5000, altitude: 5000, heading: 330 },
                 { lat: 51.52, lng: -0.12, time: 10000, altitude: 10000, heading: 315 },
                 { lat: 51.53, lng: -0.11, time: 15000, altitude: 15000, heading: 45 }
             ]);
 
-            // Start animation with speed factor
-            newDot.animate(speed);
+            // Only start animation if isPlaying is true
+            if (isPlaying) {
+                newDot.animate(speed);
+            }
 
             setDots(prevDots => [...prevDots, newDot]);
         }

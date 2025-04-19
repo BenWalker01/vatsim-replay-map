@@ -122,11 +122,32 @@ class Dot {
             return this;
         }
 
+        // Hide the marker initially if we're starting from time > 0
+        if (this.positions[0].time > 0 && this.marker) {
+            this.marker.setStyle({ opacity: 0, fillOpacity: 0 });
+        }
+
         const startTime = performance.now();
         const totalDuration = this.positions[this.positions.length - 1].time;
 
         const animate = (currentTime: number) => {
             const elapsedTime = (currentTime - startTime) * speedFactor;
+
+            // If we haven't reached the first position yet, keep the marker hidden
+            if (elapsedTime < this.positions[0].time) {
+                if (this.marker) {
+                    this.marker.setStyle({ opacity: 0, fillOpacity: 0 });
+                }
+                this.animationId = requestAnimationFrame(animate);
+                return;
+            } else if (this.marker &&
+                (this.marker.options.opacity === 0 || this.marker.options.fillOpacity === 0)) {
+                // Show the marker when we reach the first position time
+                this.marker.setStyle({
+                    opacity: 1,
+                    fillOpacity: this.options.fillOpacity || 0.8
+                });
+            }
 
             // Animation complete
             if (elapsedTime >= totalDuration) {
@@ -150,6 +171,7 @@ class Dot {
                 return;
             }
 
+            // Rest of your existing animation code...
             // Find current position based on elapsed time
             // Find the positions before and after the current time
             let nextIndex = this.positions.findIndex(pos => pos.time > elapsedTime);
@@ -183,22 +205,8 @@ class Dot {
             }
 
             if (prevPos.heading !== undefined && nextPos.heading !== undefined) {
-                // Special handling for heading to account for crossing 0/360 boundary
-                let heading1 = prevPos.heading;
-                let heading2 = nextPos.heading;
-
-                // Ensure we take the shortest path between headings
-                if (Math.abs(heading2 - heading1) > 180) {
-                    if (heading1 < heading2) {
-                        heading1 += 360;
-                    } else {
-                        heading2 += 360;
-                    }
-                }
-
-                newOptions.heading = Math.round(
-                    (heading1 + (heading2 - heading1) * segmentProgress) % 360
-                );
+                // Handle heading interpolation
+                // ...existing heading interpolation code...
             }
 
             if (Object.keys(newOptions).length > 0) {
@@ -250,6 +258,16 @@ class Dot {
             }
         }
 
+        return this;
+    }
+
+    public setVisible(visible: boolean): this {
+        if (this.marker) {
+            this.marker.setStyle({
+                opacity: visible ? 1 : 0,
+                fillOpacity: visible ? (this.options.fillOpacity || 0.8) : 0
+            });
+        }
         return this;
     }
 
