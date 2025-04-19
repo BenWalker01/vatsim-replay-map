@@ -1,166 +1,111 @@
-import React from 'react';
-import { getColorFromAtc } from './utils';
+import { TimedPosition } from './Dot'; // Import the TimedPosition type from your Dot file
 
-interface FileUploaderProps {
-    onFilesParsed: (data: { [fileName: string]: any }, replayLogs: { [fileName: string]: any }) => void;
+interface ProcessedData {
+    positions: {
+        [callsign: string]: TimedPosition[];
+    };
+    timeRange: {
+        start: number;
+        end: number;
+    };
 }
 
-const FileUploader: React.FC<FileUploaderProps> = ({ onFilesParsed }) => {
-    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const files = event.target.files;
-        if (files) {
-            const fileData: { [fileName: string]: any } = {};
-            const replayLogs: { [fileName: string]: any } = {};
-            let filesProcessed = 0;
+/**
+ * Process a VATSIM replay file text content
+ * @param fileContent Text content of the replay file
+ * @returns Processed data with positions by callsign and time range
+ */
+export function processReplayFile(fileContent: string): ProcessedData {
+    console.log("Processing File");
 
-            Array.from(files).forEach(file => {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    const contents = e.target?.result;
-                    if (contents) {
-                        const parsedData = parseFileData(contents as string);
-                        const replayLog = generateReplay(contents as string);
-                        fileData[file.name] = parsedData;
-                        replayLogs[file.name] = replayLog;
-                        filesProcessed++;
-                        if (filesProcessed === files.length) {
-                            onFilesParsed(fileData, replayLogs);
-                        }
-                    }
+
+    const lines = fileContent.split('\n');
+    const positions: { [callsign: string]: TimedPosition[] } = {};
+    let minTime = Number.MAX_SAFE_INTEGER;
+    let maxTime = 0;
+
+    // Process each line
+    for (let i = 0; i < lines.length - 1; i++) {
+        let line = lines[i]
+        line = line.trim();
+        if (line === '' || line.startsWith('#')) continue; // Skip empty lines and comments
+
+        // [13:05:45 >>>> UK_B_FMP]
+        // @S:EWG6902:2000:1:51.28150:6.76547:118:0:4191300:226
+
+        if (line.startsWith('@N') || line.startsWith('@S')) {
+            try {
+                // Extract time from previous line (format like [13:05:45 >>>> UK_B_FMP])
+                const timeStr = lines[i - 1].trim().substring(1, 9); // Get "13:05:45"
+                const [hours, minutes, seconds] = timeStr.split(':').map(Number);
+                const time = (hours * 3600 + minutes * 60 + seconds) * 1000; // Convert to ms
+
+                minTime = Math.min(minTime, time);
+                maxTime = Math.max(maxTime, time);
+
+                const parts = line.split(':');
+                const callsign = parts[1];
+                const squawk = parts[2];
+                const lat = parseFloat(parts[4]);
+                const lng = parseFloat(parts[5]);
+                const altitude = parseFloat(parts[6]);
+                const encodedHeading = parseFloat(parts[7]);
+
+                let heading = 0;
+
+                if (!isNaN(encodedHeading)) {
+                    const shiftedValue = encodedHeading >> 2;
+                    heading = Math.round((shiftedValue - 0.5) / 2.88);
+                    // Ensure heading is between 0-359
+                    heading = ((heading % 360) + 360) % 360;
+                }
+
+                const position: TimedPosition = {
+                    lat,
+                    lng,
+                    time,
+                    altitude,
+                    heading,
                 };
-                reader.readAsText(file);
+
+                // Add to positions by callsign
+                if (!positions[callsign]) {
+                    positions[callsign] = [];
+                }
+                positions[callsign].push(position);
+            } catch (error) {
+                console.error('Error parsing lines:', lines[i - 1], line, error);
+            }
+        }
+
+    }
+
+    // Sort positions by time for each callsign
+    Object.keys(positions).forEach(callsign => {
+        positions[callsign].sort((a, b) => a.time - b.time);
+    });
+
+    // Normalize timestamps to start from 0
+    if (minTime !== Number.MAX_SAFE_INTEGER) {
+        Object.keys(positions).forEach(callsign => {
+            positions[callsign].forEach(pos => {
+                pos.time = pos.time - minTime;
             });
+        });
+
+        // Update timeRange
+        maxTime = maxTime - minTime;
+        minTime = 0;
+    }
+    console.log(`Processed ${Object.keys(positions).length} aircraft`);
+    console.log(positions)
+
+
+    return {
+        positions,
+        timeRange: {
+            start: minTime,
+            end: maxTime
         }
     };
-
-    const parseFileData = (data: string) => {
-        const lines = data.split("\n");
-        const callsignData: { [key: string]: { lat: number, lng: number, alt: number }[] } = {};
-        for (let i = 0; i < lines.length - 1; i++) {
-            const line = lines[i];
-            if (line.startsWith("@N:")) { // plane position ??
-                const parts = line.split(":");
-                if (parts.length >= 8) {
-                    const callsign = parts[1];
-                    const lat = parseFloat(parts[4]);
-                    const lng = parseFloat(parts[5]);
-                    const alt = parseFloat(parts[6]);
-                    if (!callsignData[callsign]) {
-                        callsignData[callsign] = [];
-                    }
-                    callsignData[callsign].push({ lat, lng, alt });
-                }
-            }
-        }
-        return callsignData;
-    };
-
-    const generateReplay = (data: string) => {
-        const replayLogGlobal: { [offset: number]: { [callsign: string]: { lat: number, lng: number, colour: string } } } = {};
-        const replayLog: { [callsign: string]: { coords: [[lat: number, lng: number]], delay: number, colours: [string] } } = {}
-        const planesWith: { [callsign: string]: { to: string, from: string, first: boolean } } = {};
-        const lines = data.split("\n");
-        let startTimeInSeconds;
-
-        for (let i = 0; i < lines.length - 1; i++) {
-            const line = lines[i];
-            if (line.startsWith("$CQ")) { // work out which atco has the plane. TODO. Back fill
-                const parts = line.trim().split(":");
-                if (parts[2] === "HT") { // handoff accepted??
-                    if (!planesWith[parts[3]]) {
-                        planesWith[parts[3]] = { to: '', from: '', first: false };
-                    }
-                    if (!Object.keys(planesWith).includes(parts[3])) {
-                        planesWith[parts[3]].first = true;
-                    } else {
-                        planesWith[parts[3]].first = false;
-                    }
-                    planesWith[parts[3]].to = parts[0].substring(3);
-                    planesWith[parts[3]].from = parts[4];
-                } else if (parts[2] === "WH") {
-                    if (!planesWith[parts[3]]) {
-                        planesWith[parts[3]] = { to: '', from: '', first: false };
-                    }
-                    if (!Object.keys(planesWith).includes(parts[3])) {
-                        planesWith[parts[3]].first = true;
-                    } else {
-                        planesWith[parts[3]].first = false;
-                    }
-                    planesWith[parts[3]].to = parts[0].substring(3);
-                }
-            }
-            if (line.startsWith("@N:")) { // plane position
-                if (!startTimeInSeconds) { // first plane movement of the file
-                    const startTime = lines[i - 1].slice(1, -1).split(" ")[0];
-                    const [startHours, startMinutes, startSeconds] = startTime.split(":").map(Number);
-                    startTimeInSeconds = startHours * 3600 + startMinutes * 60 + startSeconds;
-                }
-                const parts = line.split(":");
-                if (parts.length >= 8) {
-                    const callsign = parts[1];
-                    const lat = parseFloat(parts[4]);
-                    const lng = parseFloat(parts[5]);
-                    const timeLine = lines[i - 1];
-                    const time = timeLine.slice(1, -1).split(" ")[0];
-                    const [hours, minutes, seconds] = time.split(":").map(Number);
-                    const timeInSeconds = hours * 3600 + minutes * 60 + seconds;
-                    const offset = timeInSeconds - startTimeInSeconds;
-
-
-                    if (Object.keys(replayLog).includes(callsign)) {
-                        if (Object.keys(planesWith).includes(callsign)) {
-                            replayLog[callsign].coords.push([lat, lng])
-                            replayLog[callsign].colours.push(getColorFromAtc(planesWith[callsign].to))
-                        } else {
-                            replayLog[callsign].coords.push([lat, lng])
-                            replayLog[callsign].colours.push("blue")
-                        }
-                    } else {
-                        if (Object.keys(planesWith).includes(callsign)) {
-                            replayLog[callsign] = { coords: [[lat, lng]], delay: offset, colours: [getColorFromAtc(planesWith[callsign].to)] }
-                        } else {
-                            replayLog[callsign] = { coords: [[lat, lng]], delay: offset, colours: ["blue"] }
-                        }
-                    }
-                }
-            }
-        }
-
-        let maxDelay = 0;
-
-        for (const callsign in replayLog) {
-            if (replayLog.hasOwnProperty(callsign)) {
-                const log = replayLog[callsign];
-                maxDelay = Math.max(maxDelay, log.coords.length + log.delay);
-                for (let i = log.delay; i < log.coords.length; i++) {
-                    if (!replayLogGlobal[i + log.delay]) {
-                        replayLogGlobal[i + log.delay] = {};
-                    }
-                    replayLogGlobal[i + log.delay][callsign] = { lat: log.coords[i][0], lng: log.coords[i][1], colour: log.colours[i] };
-                }
-            }
-        }
-        console.log("Global");
-        console.log(replayLogGlobal);
-        console.log(maxDelay)
-
-        return replayLog;
-    };
-
-    return (
-        <div>
-            <button onClick={() => document.getElementById('fileInput')?.click()}>
-                Open Replay Files
-            </button>
-            <input
-                type="file"
-                id="fileInput"
-                style={{ display: 'none' }}
-                multiple
-                onChange={handleFileChange}
-            />
-        </div>
-    );
-};
-
-export default FileUploader;
+}

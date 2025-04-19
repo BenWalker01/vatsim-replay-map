@@ -1,12 +1,13 @@
 import L from 'leaflet';
 
 // Define position with timing information
-interface TimedPosition {
+export interface TimedPosition {
     lat: number;
     lng: number;
     time: number; // Time in milliseconds from start
     altitude?: number;
     heading?: number;
+    atc?: string
 }
 
 interface DotOptions {
