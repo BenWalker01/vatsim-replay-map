@@ -28,6 +28,8 @@ class Dot {
     private animationId: number | null = null;
     private positions: TimedPosition[] = [];
     private currentPositionIndex: number = 0;
+    private path: L.Polyline | null = null;
+
 
     constructor(map: L.Map, position: L.LatLngExpression, options: DotOptions = {}) {
         this.map = map;
@@ -72,6 +74,36 @@ class Dot {
             });
         }
 
+        return this;
+    }
+
+    public displayTracks(): this {
+        if (this.positions.length < 2) {
+            return this;
+        }
+
+        // Extract lat/lng points for the polyline
+        const pathPoints = this.positions.map(pos => [pos.lat, pos.lng] as L.LatLngTuple);
+
+        // Create polyline with styling
+        const pathLine = L.polyline(pathPoints, {
+            color: this.options.color || '#3388ff',
+            weight: 2,
+            opacity: 0.7,
+            smoothFactor: 1
+        }).addTo(this.map);
+
+        // Store reference to the path if needed for later removal
+        this.path = pathLine;
+
+        return this;
+    }
+
+    public hideTracks(): this {
+        if (this.path) {
+            this.path.remove();
+            this.path = null;
+        }
         return this;
     }
 
@@ -279,6 +311,10 @@ class Dot {
         if (this.marker) {
             this.marker.remove();
             this.marker = null;
+        }
+        if (this.path) {
+            this.path.remove();
+            this.path = null;
         }
         return this;
     }

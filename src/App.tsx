@@ -184,8 +184,11 @@ const App: React.FC = () => {
                                 onChange={() => {
                                     const newVisibility = !tracksVisible;
                                     setTracksVisible(newVisibility);
-                                    // Implement track visibility logic here
-                                    console.log(tracksVisible)
+                                    if (!tracksVisible) {
+                                        dots.forEach(dot => dot.displayTracks());
+                                    } else {
+                                        dots.forEach(dot => dot.hideTracks());
+                                    }
                                 }}
                             />
                             Display Tracks
