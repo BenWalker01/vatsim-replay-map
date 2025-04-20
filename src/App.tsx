@@ -200,23 +200,26 @@ const App: React.FC = () => {
                             />
                             Display Tracks
                         </label>
+
+                        <label className="checkbox-label">
+                            <input
+                                type="checkbox"
+                                checked={colourSettings}
+                                onChange={() => {
+                                    setColourSettings(!colourSettings);
+                                    dots.forEach(dot => dot.toggleColourSettings());
+                                    if (tracksVisible) {
+                                        dots.forEach(dot => dot.displayTracks());
+                                    }
+                                }}
+                            />
+                            Colour by altitude (on) / destination (off)
+                        </label>
+
                     </div>
 
 
-                    <label className="checkbox-label">
-                        <input
-                            type="checkbox"
-                            checked={colourSettings}
-                            onChange={() => {
-                                setColourSettings(!colourSettings);
-                                dots.forEach(dot => dot.toggleColourSettings());
-                                if (tracksVisible) {
-                                    dots.forEach(dot => dot.displayTracks());
-                                }
-                            }}
-                        />
-                        Colour by altitude (on) / destination (off)
-                    </label>
+
 
                     {/* <div className="slider-container">
                         <ReactSlider
