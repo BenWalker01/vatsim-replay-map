@@ -1,65 +1,86 @@
-/* General App Layout */
+/* Modern App Layout */
+:root {
+  --primary: #201e1f;
+  --secondary: #6b7a89;
+  --hover: #569ba998;
+  --text: #cdbca8;
+  --bg-dark: #050505;
+  --shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08);
+  --transition: all 0.2s ease-in-out;
+}
+
 .app-container {
   display: flex;
   flex-direction: column;
   height: 100vh;
   width: 100%;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background-color: var(--bg-dark);
+  color: var(--text);
 }
 
 /* Header Styles */
 .header {
-  background-color: #2c3e50;
-  color: white;
-  padding: 10px 20px;
+  background-color: var(--primary);
+  color: var(--text);
+  padding: 1rem 1.5rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow);
+  position: relative;
+  z-index: 10;
 }
 
 .header h1 {
   margin: 0;
-  font-size: 1.5rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.5px;
 }
 
 nav {
   display: flex;
   align-items: center;
+  gap: 1rem;
 }
 
 /* File Upload Container */
 .file-upload-container {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 0.75rem;
 }
 
 .upload-button {
-  background-color: #3498db;
-  color: white;
+  background-color: var(--secondary);
+  color: var(--text);
   border: none;
-  border-radius: 4px;
-  padding: 8px 15px;
-  font-size: 0.9rem;
+  border-radius: 0.375rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
   cursor: pointer;
-  transition: background-color 0.2s ease;
+  transition: var(--transition);
+  box-shadow: var(--shadow);
 }
 
 .upload-button:hover {
-  background-color: #2980b9;
+  background-color: var(--hover);
+  transform: translateY(-1px);
 }
 
 .file-name {
-  background-color: #34495e;
-  color: white;
-  padding: 5px 10px;
-  border-radius: 4px;
-  font-size: 0.85rem;
+  background-color: var(--secondary);
+  color: var(--text);
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
   max-width: 200px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 /* Map Container */
@@ -67,16 +88,21 @@ nav {
   flex: 1;
   width: 100%;
   z-index: 0;
+  position: relative;
 }
+
 .map-container .leaflet-tile-container .leaflet-tile {
-  filter: invert(100%) hue-rotate(180deg) brightness(50%);
+  filter: invert(100%) hue-rotate(180deg) brightness(40%) saturate(80%);
 }
 
 /* Toolbar */
 .toolbar {
-  background-color: #2c3e50;
-  color: white;
-  padding: 10px 20px;
+  background-color: var(--primary);
+  color: var(--text);
+  padding: 0.75rem 1.5rem;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+  position: relative;
+  z-index: 10;
 }
 
 /* Replay Controls */
@@ -85,50 +111,33 @@ nav {
   align-items: center;
   justify-content: space-between;
   width: 100%;
+  gap: 1.5rem;
 }
 
 /* Group the buttons together */
 .playback-controls {
   display: flex;
-  gap: 10px;
+  gap: 0.5rem;
 }
 
-/* Slider Container */
-.slider-container {
-  width: 40%;
+.playback-controls button {
+  background-color: var(--secondary);
+  color: var(--text);
+  border: none;
+  border-radius: 0.375rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: var(--transition);
+  min-width: 80px; /* Fixed minimum width */
+  text-align: center; /* Center text */
   display: flex;
-  flex-direction: column;
+  justify-content: center;
+  align-items: center;
 }
 
-.horizontal-slider {
-  width: 100%;
-  height: 20px;
-}
-
-.example-thumb {
-  background-color: #3498db;
-  border-radius: 50%;
-  cursor: grab;
-  width: 20px;
-  height: 20px;
-  margin-top: -8px;
-}
-
-.example-thumb:active {
-  cursor: grabbing;
-}
-
-.example-track {
-  background: #95a5a6;
-  height: 4px;
-  border-radius: 2px;
-}
-
-.slider-values {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.8rem;
-  margin-top: 5px;
+.playback-controls button:hover {
+  background-color: var(--hover);
 }
 
 /* Make the map take the full viewport */
@@ -140,16 +149,16 @@ nav {
 /* Visibility Controls */
 .visibility-controls {
   display: flex;
-  gap: 20px;
-  margin-left: 20px;
+  gap: 1.25rem;
+  margin-left: 1.25rem;
   align-items: center;
 }
 
 .checkbox-label {
   display: flex;
   align-items: center;
-  gap: 5px;
-  font-size: 0.9rem;
+  gap: 0.5rem;
+  font-size: 0.875rem;
   cursor: pointer;
   user-select: none;
 }
@@ -157,46 +166,62 @@ nav {
 .checkbox-label input[type="checkbox"] {
   appearance: none;
   -webkit-appearance: none;
-  width: 18px;
-  height: 18px;
-  border: 2px solid #3498db;
-  border-radius: 3px;
-  background-color: #34495e;
+  width: 1.125rem;
+  height: 1.125rem;
+  border: 2px solid var(--secondary);
+  border-radius: 0.25rem;
+  background-color: rgba(255, 255, 255, 0.05);
   position: relative;
   cursor: pointer;
+  transition: var(--transition);
 }
 
 .checkbox-label input[type="checkbox"]:checked {
-  background-color: #3498db;
+  background-color: var(--accent);
+  border-color: var(--accent);
 }
 
 .checkbox-label input[type="checkbox"]:checked::after {
-  content: "✓";
+  content: "";
   position: absolute;
-  color: white;
-  font-size: 14px;
-  top: -2px;
-  left: 3px;
+  left: 0.3125rem;
+  top: 0.1875rem;
+  width: 0.375rem;
+  height: 0.5625rem;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
 }
 
 .checkbox-label:hover input[type="checkbox"] {
-  border-color: #2980b9;
+  border-color: var(--accent);
 }
 
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .header {
     flex-direction: column;
-    gap: 10px;
-    padding: 10px;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
   }
   
   .toolbar {
-    padding: 10px;
+    padding: 0.75rem 1rem;
   }
   
-  .replay-system button {
-    padding: 6px 10px;
-    font-size: 0.8rem;
+  .replay-system {
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .slider-container {
+    width: 100%;
+  }
+  
+  .visibility-controls {
+    margin-left: 0;
+    margin-top: 0.75rem;
+    justify-content: center;
+    flex-wrap: wrap;
   }
 }

@@ -120,7 +120,7 @@ const App: React.FC = () => {
             <header className="header">
                 <h1>VATSIM Replay Map</h1>
                 <div className="wip-banner" style={{
-                    backgroundColor: '#FFFF00',
+                    backgroundColor: '#aaaa00',
                     color: '#000',
                     padding: '8px 16px',
                     margin: '8px 0',
@@ -200,23 +200,26 @@ const App: React.FC = () => {
                             />
                             Display Tracks
                         </label>
+
+                        <label className="checkbox-label">
+                            <input
+                                type="checkbox"
+                                checked={colourSettings}
+                                onChange={() => {
+                                    setColourSettings(!colourSettings);
+                                    dots.forEach(dot => dot.toggleColourSettings());
+                                    if (tracksVisible) {
+                                        dots.forEach(dot => dot.displayTracks());
+                                    }
+                                }}
+                            />
+                            Colour by altitude (on) / destination (off)
+                        </label>
+
                     </div>
 
 
-                    <label className="checkbox-label">
-                        <input
-                            type="checkbox"
-                            checked={colourSettings}
-                            onChange={() => {
-                                setColourSettings(!colourSettings);
-                                dots.forEach(dot => dot.toggleColourSettings());
-                                if (tracksVisible) {
-                                    dots.forEach(dot => dot.displayTracks());
-                                }
-                            }}
-                        />
-                        Colour by altitude (on) / destination (off)
-                    </label>
+
 
                     {/* <div className="slider-container">
                         <ReactSlider
