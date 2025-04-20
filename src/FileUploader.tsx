@@ -8,6 +8,7 @@ interface ProcessedData {
         start: number;
         end: number;
     };
+    fplans: { [callsign: string]: { dep: string, dest: string, actype: string } }
 }
 
 /**
@@ -24,11 +25,24 @@ export function processReplayFile(fileContent: string): ProcessedData {
     let minTime = Number.MAX_SAFE_INTEGER;
     let maxTime = 0;
 
+    const fplans: { [callsign: string]: { dep: string, dest: string, actype: string } } = {};
+
     // Process each line
     for (let i = 0; i < lines.length - 1; i++) {
         let line = lines[i]
         line = line.trim();
         if (line === '' || line.startsWith('#')) continue; // Skip empty lines and comments
+
+        if (line.startsWith("$FP")) {
+            const parts = line.split(':');
+            const cs = parts[0].substring(3);
+            const dest = parts[9];
+            const dep = parts[5];
+            const actype = parts[3];
+
+            fplans[cs] = { dep, dest, actype };
+
+        }
 
         // [13:05:45 >>>> UK_B_FMP]
         // @S:EWG6902:2000:1:51.28150:6.76547:118:0:4191300:226
@@ -106,6 +120,7 @@ export function processReplayFile(fileContent: string): ProcessedData {
         timeRange: {
             start: minTime,
             end: maxTime
-        }
+        },
+        fplans
     };
 }
