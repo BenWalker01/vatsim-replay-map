@@ -208,13 +208,16 @@ const App: React.FC = () => {
                             type="checkbox"
                             checked={colourSettings}
                             onChange={() => {
-                                console.log("colour change")
                                 setColourSettings(!colourSettings);
                                 dots.forEach(dot => dot.toggleColourSettings());
-                                dots.forEach(dot => dot.displayTracks());
+                                if (!tracksVisible) {
+                                    dots.forEach(dot => dot.displayTracks());
+                                } else {
+                                    dots.forEach(dot => dot.hideTracks());
+                                }
                             }}
                         />
-                        Colour by altitude
+                        Colour by altitude (on) / destination (off)
                     </label>
 
                     {/* <div className="slider-container">

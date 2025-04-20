@@ -57,7 +57,6 @@ class Dot {
             console.log("Tracks already defined");
 
         } else {
-            console.log("generating segments")
             const points = this.positions.map(pos => ({ lat: pos.lat, lng: pos.lng, alt: pos.altitude || 0 }));
             const dpPoints = douglasPeucker(points, 0.001); // Add appropriate epsilon value
 
@@ -89,7 +88,6 @@ class Dot {
         if (this.trackPath) {
             console.log("Path already exists");
         } else {
-            console.log("generating path")
 
             const pathPoints = this.positions.map(pos => [pos.lat, pos.lng] as L.LatLngTuple);
 
@@ -140,11 +138,9 @@ class Dot {
     public displayTracks(): this {
         this.hideTracks();
         if (this.colourSettings) {
-            console.log("Adding true tracks")
             this.trackSegments.addTo(this.map);
         } else {
             if (this.trackPath) {
-                console.log("adding False Tracks")
                 this.trackPath.addTo(this.map);
             }
 
@@ -383,7 +379,6 @@ class Dot {
     }
 
     public toggleColourSettings() {
-        console.log("Toggling")
         this.colourSettings = !this.colourSettings;
     }
 }
