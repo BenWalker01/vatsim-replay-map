@@ -16,6 +16,7 @@ const App: React.FC = () => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [planesVisible, setPlanesVisible] = useState(true);
     const [tracksVisible, setTracksVisible] = useState(false);
+    const [colourSettings, setColourSettings] = useState(true);
 
 
     const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -41,17 +42,19 @@ const App: React.FC = () => {
                         const positions = processedData.positions[callsign];
                         if (positions.length === 0) return null;
 
-                        // Get first position for initial placement
                         const firstPos = positions[0];
 
-                        // Create a dot for this aircraft
+                        const flightPlan = processedData.fplans && processedData.fplans[callsign];
+                        const destination = flightPlan ? flightPlan.dest : '';
+
+
                         const dot = new Dot(
                             leafletMapRef.current!,
                             [firstPos.lat, firstPos.lng],
                             {
-                                color: getRandomColor(), // You'll need to implement this
                                 callsign: callsign,
-                                altitude: firstPos.altitude
+                                altitude: firstPos.altitude,
+                                dest: destination,
                             }
                         ).draw();
 
@@ -80,14 +83,7 @@ const App: React.FC = () => {
         }
     };
 
-    // Helper function to generate random colors for aircraft
-    const getRandomColor = (): string => {
-        const colors = [
-            '#FF5733', '#33FF57', '#3357FF', '#F033FF', '#FF33F0',
-            '#33FFF0', '#F0FF33', '#FF8C33', '#8C33FF', '#33FF8C'
-        ];
-        return colors[Math.floor(Math.random() * colors.length)];
-    };
+
 
 
     useEffect(() => {
@@ -123,6 +119,17 @@ const App: React.FC = () => {
         <div className="app-container">
             <header className="header">
                 <h1>VATSIM Replay Map</h1>
+                <div className="wip-banner" style={{
+                    backgroundColor: '#FFFF00',
+                    color: '#000',
+                    padding: '8px 16px',
+                    margin: '8px 0',
+                    fontWeight: 'bold',
+                    textAlign: 'center',
+                    borderRadius: '4px'
+                }}>
+                    Very WIP (Things are broken)
+                </div>
                 <nav>
                     <div className="file-upload-container">
                         <input
@@ -195,6 +202,20 @@ const App: React.FC = () => {
                         </label>
                     </div>
 
+
+                    <label className="checkbox-label">
+                        <input
+                            type="checkbox"
+                            checked={colourSettings}
+                            onChange={() => {
+                                console.log("colour change")
+                                setColourSettings(!colourSettings);
+                                dots.forEach(dot => dot.toggleColourSettings());
+                            }}
+                        />
+                        Colour by altitude
+                    </label>
+
                     <div className="slider-container">
                         <ReactSlider
                             className="horizontal-slider"
@@ -212,8 +233,8 @@ const App: React.FC = () => {
                         </div>
                     </div>
                 </div>
-            </footer>
-        </div>
+            </footer >
+        </div >
     );
 };
 

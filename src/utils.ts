@@ -64,13 +64,30 @@ export const hashString = (str: string): number => {
 };
 
 export const getColorFromAtc = (atco: string): string => {
-  const hash = hashString(atco)
-  const letters = '0123456789ABCDEF';
-  let color = '#';
-  for (let i = 0; i < 6; i++) {
-    color += letters[(hash >> (i * 4)) & 0xF];
-  }
-  return color;
+  if (!atco) return "#3388ff"; // Default color if no input
+
+  const hash = hashString(atco);
+  // Use HSL color model for better brightness control
+  // Hue: 0-360 (full color spectrum)
+  // Saturation: 60-100% (fairly saturated colors)
+  // Lightness: 50-80% (medium to bright, never dark)
+  const hue = Math.abs(hash % 360);
+  const saturation = 70 + (hash % 30); // 70-100%
+  const lightness = 50 + (Math.abs((hash >> 8) % 30)); // 50-80%
+
+  return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+};
+
+export const getColorFromAirport = (airport: string): string => {
+  if (!airport) return "#3388ff"; // Default color if no input
+
+  const hash = hashString(airport);
+  // Similar HSL approach but with a different hash shift to create variety
+  const hue = Math.abs((hash + 120) % 360); // Offset hue by 120 from the ATC color
+  const saturation = 65 + (hash % 35); // 65-100%
+  const lightness = 55 + (Math.abs((hash >> 4) % 25)); // 55-80%
+
+  return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
 };
 
 export const findNextCallsignOffset = (callsign: string, replayLog: { [fileName: string]: any[] }, counter: number) => {
