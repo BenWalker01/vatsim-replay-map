@@ -210,10 +210,8 @@ const App: React.FC = () => {
                             onChange={() => {
                                 setColourSettings(!colourSettings);
                                 dots.forEach(dot => dot.toggleColourSettings());
-                                if (!tracksVisible) {
+                                if (tracksVisible) {
                                     dots.forEach(dot => dot.displayTracks());
-                                } else {
-                                    dots.forEach(dot => dot.hideTracks());
                                 }
                             }}
                         />
