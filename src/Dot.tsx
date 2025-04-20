@@ -30,8 +30,8 @@ class Dot {
     private animationId: number | null = null;
     private positions: TimedPosition[] = [];
     private currentPositionIndex: number = 0;
-    private path: L.Polyline | null = null;
-    private pathSegments: L.Polyline[] = [];
+    private trackSegments: L.LayerGroup = L.layerGroup();
+    private trackPath: L.Polyline | null = null;
     private colourSettings: boolean = true;
 
 
@@ -48,8 +48,61 @@ class Dot {
             heading: options.heading,
             dest: options.dest,
         };
-        console.log(options.color)
-        console.log(options.dest)
+        this.trackSegments = L.layerGroup();
+
+    }
+
+    private generateTracks(): this {
+        if (this.trackSegments.getLayers().length > 0) {
+            console.log("Tracks already defined");
+
+        } else {
+            console.log("generating segments")
+            const points = this.positions.map(pos => ({ lat: pos.lat, lng: pos.lng, alt: pos.altitude || 0 }));
+            const dpPoints = douglasPeucker(points, 0.001); // Add appropriate epsilon value
+
+            for (let i = 0; i < dpPoints.length - 1; i++) {
+                const current = dpPoints[i];
+                const next = dpPoints[i + 1];
+
+                // Calculate average altitude for this segment
+                const avgAltitude = Math.round((current.alt + next.alt) / 2);
+
+                // Get color based on average altitude
+                const color = getColourByAlt(avgAltitude);
+
+                // Create polyline for this segment
+                const segment = L.polyline(
+                    [[current.lat, current.lng], [next.lat, next.lng]],
+                    {
+                        color: color,
+                        weight: 2,
+                        opacity: 0.7,
+                        smoothFactor: 1
+                    }
+                )
+
+                this.trackSegments.addLayer(segment);
+
+            }
+        }
+        if (this.trackPath) {
+            console.log("Path already exists");
+        } else {
+            console.log("generating path")
+
+            const pathPoints = this.positions.map(pos => [pos.lat, pos.lng] as L.LatLngTuple);
+
+            // Create polyline with styling
+            this.trackPath = L.polyline(pathPoints, {
+                color: this.options.color || '#3388ff',
+                weight: 2,
+                opacity: 0.7,
+                smoothFactor: 1
+            })
+
+        }
+        return this;
     }
 
     public draw(): this {
@@ -85,78 +138,26 @@ class Dot {
     }
 
     public displayTracks(): this {
-        console.log("Drawing Tracks")
-        if (this.positions.length < 2) {
-            return this;
-        }
-
         this.hideTracks();
         if (this.colourSettings) {
-
-            // Extract lat/lng points for the polyline
-            const points = this.positions.map(pos => ({ lat: pos.lat, lng: pos.lng, alt: pos.altitude || 0 }));
-            const dpPoints = douglasPeucker(points, 0.001); // Add appropriate epsilon value
-
-            for (let i = 0; i < dpPoints.length - 1; i++) {
-                const current = dpPoints[i];
-                const next = dpPoints[i + 1];
-
-                // Calculate average altitude for this segment
-                const avgAltitude = Math.round((current.alt + next.alt) / 2);
-
-                // Get color based on average altitude
-                const color = getColourByAlt(avgAltitude);
-
-                // Create polyline for this segment
-                const segment = L.polyline(
-                    [[current.lat, current.lng], [next.lat, next.lng]],
-                    {
-                        color: color,
-                        weight: 2,
-                        opacity: 0.7,
-                        smoothFactor: 1
-                    }
-                ).addTo(this.map);
-
-
-
-                // Store segment reference for later removal
-                if (!this.pathSegments) {
-                    this.pathSegments = [];
-                }
-                this.pathSegments.push(segment);
+            console.log("Adding true tracks")
+            this.trackSegments.addTo(this.map);
+        } else {
+            if (this.trackPath) {
+                console.log("adding False Tracks")
+                this.trackPath.addTo(this.map);
             }
-        }
-        else {
 
-
-            const pathPoints = this.positions.map(pos => [pos.lat, pos.lng] as L.LatLngTuple);
-
-            // Create polyline with styling
-            const pathLine = L.polyline(pathPoints, {
-                color: this.options.color || '#3388ff',
-                weight: 2,
-                opacity: 0.7,
-                smoothFactor: 1
-            }).addTo(this.map);
-
-            // Store reference to the path if needed for later removal
-            this.path = pathLine;
         }
         return this;
     }
 
     public hideTracks(): this {
-        if (this.pathSegments) {
-            this.pathSegments.forEach(segment => segment.remove());
-            this.pathSegments = [];
-        }
-        if (this.path) {
-            this.path.remove();
-            this.path = null;
-        }
+        this.trackSegments.remove();
+        if (this.trackPath) this.trackPath.remove();
         return this;
     }
+
 
     public updatePosition(newPosition: L.LatLngExpression): this {
         this.position = newPosition;
@@ -174,6 +175,8 @@ class Dot {
         // Ensure positions are sorted by time
         this.positions = [...positions].sort((a, b) => a.time - b.time);
         this.currentPositionIndex = 0;
+
+        this.generateTracks();
 
         // If we have positions, set initial position to the first one
         if (this.positions.length > 0) {
@@ -363,14 +366,7 @@ class Dot {
             this.marker.remove();
             this.marker = null;
         }
-        if (this.path) {
-            this.path.remove();
-            this.path = null;
-        }
-        if (this.pathSegments) {
-            this.pathSegments.forEach(segment => segment.remove());
-            this.pathSegments = [];
-        }
+
         return this;
     }
 
@@ -388,7 +384,6 @@ class Dot {
 
     public toggleColourSettings() {
         console.log("Toggling")
-        this.displayTracks();
         this.colourSettings = !this.colourSettings;
     }
 }

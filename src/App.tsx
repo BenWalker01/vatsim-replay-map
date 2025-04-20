@@ -211,12 +211,13 @@ const App: React.FC = () => {
                                 console.log("colour change")
                                 setColourSettings(!colourSettings);
                                 dots.forEach(dot => dot.toggleColourSettings());
+                                dots.forEach(dot => dot.displayTracks());
                             }}
                         />
                         Colour by altitude
                     </label>
 
-                    <div className="slider-container">
+                    {/* <div className="slider-container">
                         <ReactSlider
                             className="horizontal-slider"
                             thumbClassName="example-thumb"
@@ -231,7 +232,7 @@ const App: React.FC = () => {
                             <span>0</span>
                             <span>660</span>
                         </div>
-                    </div>
+                    </div> */}
                 </div>
             </footer >
         </div >
