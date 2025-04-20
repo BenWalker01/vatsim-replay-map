@@ -88,7 +88,7 @@ const App: React.FC = () => {
 
     useEffect(() => {
         if (mapRef.current && !leafletMapRef.current) {
-            leafletMapRef.current = new LeafletMap(mapRef.current).setView([51.505, -0.09], 13);
+            leafletMapRef.current = new LeafletMap(mapRef.current).setView([55.3781, -3.436], 6);
 
             new TileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
