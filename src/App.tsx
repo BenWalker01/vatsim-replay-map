@@ -120,7 +120,7 @@ const App: React.FC = () => {
             <header className="header">
                 <h1>VATSIM Replay Map</h1>
                 <div className="wip-banner" style={{
-                    backgroundColor: '#FFFF00',
+                    backgroundColor: '#aaaa00',
                     color: '#000',
                     padding: '8px 16px',
                     margin: '8px 0',

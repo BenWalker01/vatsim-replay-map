@@ -1,11 +1,10 @@
 /* Modern App Layout */
 :root {
-  --primary: #2d3748;
-  --secondary: #4a5568;
-  --accent: #4299e1;
-  --accent-hover: #3182ce;
-  --text: #e2e8f0;
-  --bg-dark: #1a202c;
+  --primary: #201e1f;
+  --secondary: #6b7a89;
+  --hover: #569ba998;
+  --text: #cdbca8;
+  --bg-dark: #050505;
   --shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08);
   --transition: all 0.2s ease-in-out;
 }
@@ -54,8 +53,8 @@ nav {
 }
 
 .upload-button {
-  background-color: var(--accent);
-  color: white;
+  background-color: var(--secondary);
+  color: var(--text);
   border: none;
   border-radius: 0.375rem;
   padding: 0.5rem 1rem;
@@ -67,7 +66,7 @@ nav {
 }
 
 .upload-button:hover {
-  background-color: var(--accent-hover);
+  background-color: var(--hover);
   transform: translateY(-1px);
 }
 
@@ -138,7 +137,7 @@ nav {
 }
 
 .playback-controls button:hover {
-  background-color: var(--accent);
+  background-color: var(--hover);
 }
 
 /* Make the map take the full viewport */
