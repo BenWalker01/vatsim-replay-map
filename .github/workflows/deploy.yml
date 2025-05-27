@@ -7,9 +7,15 @@ on:
     paths-ignore:
       - '.github/**'
 
+  workflow_dispatch:
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
     steps:
         - name: Checkout code
           uses: actions/checkout@v3
@@ -20,15 +26,11 @@ jobs:
             node-version: '18'
             cache: 'npm'
 
-        - name: Setup Git User
-          run: |
-            git config --global user.email "146777065+BenWalker01@users.noreply.github.com"
-            git config --global user.name "BenWalker01"
-
         - name: Install dependencies
           run: npm ci
 
-        - name: Build
+        - name: Deploy
           run: npm run deploy
           env:
             CI: false
+            GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
