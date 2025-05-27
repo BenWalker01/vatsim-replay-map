@@ -1,15 +1,15 @@
 {
   "files": {
     "main.css": "/vatsim-replay-map/static/css/main.9bf98536.css",
-    "main.js": "/vatsim-replay-map/static/js/main.9f8d5cfe.js",
+    "main.js": "/vatsim-replay-map/static/js/main.a48b62e0.js",
     "static/js/453.f5d719b9.chunk.js": "/vatsim-replay-map/static/js/453.f5d719b9.chunk.js",
     "index.html": "/vatsim-replay-map/index.html",
     "main.9bf98536.css.map": "/vatsim-replay-map/static/css/main.9bf98536.css.map",
-    "main.9f8d5cfe.js.map": "/vatsim-replay-map/static/js/main.9f8d5cfe.js.map",
+    "main.a48b62e0.js.map": "/vatsim-replay-map/static/js/main.a48b62e0.js.map",
     "453.f5d719b9.chunk.js.map": "/vatsim-replay-map/static/js/453.f5d719b9.chunk.js.map"
   },
   "entrypoints": [
     "static/css/main.9bf98536.css",
-    "static/js/main.9f8d5cfe.js"
+    "static/js/main.a48b62e0.js"
   ]
 }
