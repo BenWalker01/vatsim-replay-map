@@ -1,8 +1,7 @@
 import './App.css';
 import 'leaflet/dist/leaflet.css'; // Import Leaflet CSS
 import React, { useEffect, useRef, useState } from 'react';
-import { Map as LeafletMap, TileLayer, Marker } from 'leaflet';
-import ReactSlider from "react-slider";
+import { Map as LeafletMap, TileLayer } from 'leaflet';
 import Dot from './Dot';
 import { processReplayFile } from './FileUploader';
 
@@ -101,8 +100,10 @@ const App: React.FC = () => {
     useEffect(() => {
         dots.forEach(dot => {
             if (isPlaying) {
+                // Resume animation from current position with current speed
                 dot.animate(speed);
             } else {
+                // Just stop the animation, don't reset position
                 dot.stopAnimation();
             }
         });
@@ -167,6 +168,12 @@ const App: React.FC = () => {
                         </button>
                         <button onClick={() => setSpeed(prevSpeed => prevSpeed * 2)}>
                             +
+                        </button>
+                        <button onClick={() => {
+                            setIsPlaying(false);
+                            dots.forEach(dot => dot.resetAnimation());
+                        }}>
+                            Reset
                         </button>
                     </div>
 

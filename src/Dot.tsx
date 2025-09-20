@@ -33,6 +33,9 @@ class Dot {
     private trackSegments: L.LayerGroup = L.layerGroup();
     private trackPath: L.Polyline | null = null;
     private colourSettings: boolean = true;
+    private currentAnimationTime: number = 0; // Track current animation progress in milliseconds
+    private animationStartTime: number = 0; // When the current animation session started
+    private isAnimationPaused: boolean = false;
 
 
     constructor(map: L.Map, position: L.LatLngExpression, options: DotOptions = {}) {
@@ -171,6 +174,9 @@ class Dot {
         // Ensure positions are sorted by time
         this.positions = [...positions].sort((a, b) => a.time - b.time);
         this.currentPositionIndex = 0;
+        this.currentAnimationTime = 0;
+        this.animationStartTime = 0;
+        this.isAnimationPaused = false;
 
         this.generateTracks();
 
@@ -195,8 +201,9 @@ class Dot {
      * Animate the dot according to its predefined positions and timings
      * @param speedFactor Speed multiplier (1 = normal, 2 = twice as fast)
      * @param onComplete Callback function when animation completes
+     * @param resumeFromCurrent Whether to resume from current position (default: true)
      */
-    public animate(speedFactor: number = 1, onComplete?: () => void): this {
+    public animate(speedFactor: number = 1, onComplete?: () => void, resumeFromCurrent: boolean = true): this {
         // Cancel any existing animation
         this.stopAnimation();
 
@@ -205,16 +212,28 @@ class Dot {
             return this;
         }
 
-        // Hide the marker initially if we're starting from time > 0
-        if (this.positions[0].time > 0 && this.marker) {
+        // If we're not resuming or if this is the first animation, reset to start
+        if (!resumeFromCurrent || this.currentAnimationTime === 0) {
+            this.currentAnimationTime = 0;
+            this.isAnimationPaused = false;
+        } else {
+            // We're resuming, so don't reset the current time
+            this.isAnimationPaused = false;
+        }
+
+        // Calculate the animation start time based on current progress and speed
+        this.animationStartTime = performance.now() - (this.currentAnimationTime / speedFactor);
+
+        // Hide the marker initially if we're at the very start and first position has delay
+        if (this.currentAnimationTime === 0 && this.positions[0].time > 0 && this.marker) {
             this.marker.setStyle({ opacity: 0, fillOpacity: 0 });
         }
 
-        const startTime = performance.now();
         const totalDuration = this.positions[this.positions.length - 1].time;
 
         const animate = (currentTime: number) => {
-            const elapsedTime = (currentTime - startTime) * speedFactor;
+            const elapsedTime = (currentTime - this.animationStartTime) * speedFactor;
+            this.currentAnimationTime = elapsedTime;
 
             // If we haven't reached the first position yet, keep the marker hidden
             if (elapsedTime < this.positions[0].time) {
@@ -247,8 +266,8 @@ class Dot {
                 }
 
                 this.setVisible(false);
-
                 this.animationId = null;
+                this.currentAnimationTime = totalDuration;
 
                 if (onComplete) {
                     onComplete();
@@ -256,7 +275,6 @@ class Dot {
                 return;
             }
 
-            // Rest of your existing animation code...
             // Find current position based on elapsed time
             // Find the positions before and after the current time
             let nextIndex = this.positions.findIndex(pos => pos.time > elapsedTime);
@@ -290,8 +308,8 @@ class Dot {
             }
 
             if (prevPos.heading !== undefined && nextPos.heading !== undefined) {
-                // Handle heading interpolation
-                // ...existing heading interpolation code...
+                // Handle heading interpolation (keeping existing logic)
+                newOptions.heading = prevPos.heading + (nextPos.heading - prevPos.heading) * segmentProgress;
             }
 
             if (Object.keys(newOptions).length > 0) {
@@ -312,7 +330,44 @@ class Dot {
         if (this.animationId !== null) {
             cancelAnimationFrame(this.animationId);
             this.animationId = null;
+            this.isAnimationPaused = true;
         }
+        return this;
+    }
+
+    /**
+     * Reset the animation to the beginning
+     */
+    public resetAnimation(): this {
+        this.stopAnimation();
+        this.currentAnimationTime = 0;
+        this.animationStartTime = 0;
+        this.isAnimationPaused = false;
+
+        // Reset to initial position if we have positions
+        if (this.positions.length > 0) {
+            const initial = this.positions[0];
+            this.updatePosition([initial.lat, initial.lng]);
+
+            // Update initial options
+            const initialOptions: Partial<DotOptions> = {};
+            if (initial.altitude !== undefined) initialOptions.altitude = initial.altitude;
+            if (initial.heading !== undefined) initialOptions.heading = initial.heading;
+            if (Object.keys(initialOptions).length > 0) {
+                this.updateOptions(initialOptions);
+            }
+
+            // Hide the marker if the first position has a start time > 0
+            if (this.marker && initial.time > 0) {
+                this.marker.setStyle({ opacity: 0, fillOpacity: 0 });
+            } else if (this.marker) {
+                this.marker.setStyle({
+                    opacity: 1,
+                    fillOpacity: this.options.fillOpacity || 0.8
+                });
+            }
+        }
+
         return this;
     }
 
