@@ -364,7 +364,7 @@ const App: React.FC = () => {
                     textAlign: 'center',
                     borderRadius: '4px'
                 }}>
-                    Very WIP (Things are broken)
+                    Very WIP (Things are (less) broken)
                 </div>
                 <nav>
                     <div className="file-upload-container">
