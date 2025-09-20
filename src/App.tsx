@@ -1,7 +1,8 @@
 import './App.css';
 import 'leaflet/dist/leaflet.css'; // Import Leaflet CSS
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Map as LeafletMap, TileLayer } from 'leaflet';
+import ReactSlider from "react-slider";
 import Dot from './Dot';
 import { processReplayFile } from './FileUploader';
 
@@ -21,6 +22,27 @@ const App: React.FC = () => {
     const [airportFilter, setAirportFilter] = useState('');
     const [filterType, setFilterType] = useState<'dep' | 'arr' | 'both'>('dep');
     const [airportFilterEnabled, setAirportFilterEnabled] = useState(false);
+    
+    // Altitude filtering state
+    const [altitudeRange, setAltitudeRange] = useState<[number, number]>([0, 45000]);
+    const [altitudeFilterEnabled, setAltitudeFilterEnabled] = useState(false);
+    const [debouncedAltitudeRange, setDebouncedAltitudeRange] = useState<[number, number]>([0, 45000]);
+    const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Debounced altitude range update for performance
+    const handleAltitudeRangeChange = useCallback((newRange: [number, number]) => {
+        setAltitudeRange(newRange);
+        
+        // Clear existing timeout
+        if (debounceTimeoutRef.current) {
+            clearTimeout(debounceTimeoutRef.current);
+        }
+        
+        // Set new timeout for debounced update
+        debounceTimeoutRef.current = setTimeout(() => {
+            setDebouncedAltitudeRange(newRange);
+        }, 300); // 300ms delay after user stops sliding
+    }, []);
 
 
     const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -113,10 +135,12 @@ const App: React.FC = () => {
         });
     }, [isPlaying, speed, dots]);
 
-    // Apply airport filtering
+    // Apply all filtering (airport and altitude)
     useEffect(() => {
         dots.forEach(dot => {
-            const shouldShow = !airportFilterEnabled || dot.matchesAirportFilter(airportFilter, filterType);
+            const airportMatch = !airportFilterEnabled || dot.matchesAirportFilter(airportFilter, filterType);
+            const altitudeMatch = !altitudeFilterEnabled || dot.isWithinAltitudeRange(debouncedAltitudeRange[0], debouncedAltitudeRange[1]);
+            const shouldShow = airportMatch && altitudeMatch;
             
             // Handle plane visibility
             if (planesVisible && shouldShow) {
@@ -132,11 +156,15 @@ const App: React.FC = () => {
                 dot.hideTracks();
             }
         });
-    }, [airportFilterEnabled, airportFilter, filterType, dots, planesVisible, tracksVisible]);
+    }, [airportFilterEnabled, airportFilter, filterType, altitudeFilterEnabled, debouncedAltitudeRange, dots, planesVisible, tracksVisible]);
 
     useEffect(() => {
         return () => {
             dots.forEach(dot => dot.remove());
+            // Clean up debounce timeout
+            if (debounceTimeoutRef.current) {
+                clearTimeout(debounceTimeoutRef.current);
+            }
         };
     }, [dots]);
 
@@ -277,27 +305,41 @@ const App: React.FC = () => {
                             )}
                           </div>
 
-                    </div>
-
-
-
-
-                    {/* <div className="slider-container">
-                        <ReactSlider
-                            className="horizontal-slider"
-                            thumbClassName="example-thumb"
-                            trackClassName="example-track"
-                            defaultValue={[0, 660]}
-                            ariaLabel={["lower", "upper"]}
-                            ariaValuetext={state => `Thumb value ${state.valueNow}`}
-                            pearling
-                            minDistance={10}
-                        />
-                        <div className="slider-values">
-                            <span>0</span>
-                            <span>660</span>
+                        <div className="altitude-filter-container">
+                            <label className="checkbox-label">
+                                <input
+                                    type="checkbox"
+                                    checked={altitudeFilterEnabled}
+                                    onChange={() => setAltitudeFilterEnabled(!altitudeFilterEnabled)}
+                                />
+                                Filter by Altitude
+                            </label>
+                            
+                            {altitudeFilterEnabled && (
+                                <div className="altitude-filter-controls">
+                                    <div className="altitude-slider-container">
+                                        <ReactSlider
+                                            className="altitude-slider"
+                                            thumbClassName="altitude-thumb"
+                                            trackClassName="altitude-track"
+                                            value={altitudeRange}
+                                            onChange={handleAltitudeRangeChange}
+                                            min={0}
+                                            max={45000}
+                                            step={500}
+                                            minDistance={1000}
+                                            pearling={false}
+                                        />
+                                        <div className="altitude-labels">
+                                            <span>{altitudeRange[0].toLocaleString()} ft</span>
+                                            <span>{altitudeRange[1].toLocaleString()} ft</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
-                    </div> */}
+
+                    </div>
                 </div>
             </footer >
         </div >

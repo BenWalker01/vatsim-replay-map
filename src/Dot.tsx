@@ -478,6 +478,19 @@ class Dot {
     public getDestination(): string | undefined {
         return this.options.dest;
     }
+
+    /**
+     * Check if this dot's altitude is within the specified range
+     * @param minAltitude Minimum altitude (inclusive)
+     * @param maxAltitude Maximum altitude (inclusive)
+     * @returns true if the dot's altitude is within range
+     */
+    public isWithinAltitudeRange(minAltitude: number, maxAltitude: number): boolean {
+        const altitude = this.options.altitude;
+        if (altitude === undefined) return true; // Show dots without altitude data
+        
+        return altitude >= minAltitude && altitude <= maxAltitude;
+    }
 }
 
 export default Dot;
