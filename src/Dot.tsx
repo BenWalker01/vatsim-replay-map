@@ -372,7 +372,9 @@ class Dot {
                     this.updateOptions(finalOptions);
                 }
 
+                // Hide the plane and clear trail when animation is complete
                 this.setVisible(false);
+                this.clearTrail(); // Clear trail when plane disappears
                 this.animationId = null;
                 this.currentAnimationTime = totalDuration;
 
@@ -521,6 +523,14 @@ class Dot {
                 fillOpacity: visible ? (this.options.fillOpacity || 0.8) : 0
             });
         }
+        
+        // Also hide/show trail when hiding/showing the plane
+        if (!visible && this.trailPolyline) {
+            this.trailPolyline.remove();
+        } else if (visible && this.trailsVisible && this.trailPolyline && this.trailPoints.length > 1) {
+            this.trailPolyline.addTo(this.map);
+        }
+        
         return this;
     }
 
