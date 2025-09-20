@@ -37,6 +37,11 @@ class Dot {
     private currentAnimationTime: number = 0; // Track current animation progress in milliseconds
     private animationStartTime: number = 0; // When the current animation session started
     private isAnimationPaused: boolean = false;
+    private trailPoints: L.LatLng[] = []; // Store trail points for performance
+    private trailPolyline: L.Polyline | null = null; // Single polyline for better performance
+    private maxTrailPoints: number = 6; // Very short trail length for performance
+    private trailsVisible: boolean = false; // Track if trails should be visible
+    private lastSpeed: number = 0; // Track last calculated speed
 
 
     constructor(map: L.Map, position: L.LatLngExpression, options: DotOptions = {}) {
@@ -165,6 +170,106 @@ class Dot {
         if (this.marker) {
             this.marker.setLatLng(newPosition);
         }
+        
+        // Add point to trail for performance-optimized trail rendering
+        this.addTrailPoint(newPosition);
+        
+        return this;
+    }
+
+    /**
+     * Add a point to the trail with performance optimization and speed-based length
+     */
+    private addTrailPoint(position: L.LatLngExpression): void {
+        const latLng = L.latLng(position as any);
+        
+        // Calculate speed and adjust trail length (simplified for performance)
+        let dynamicTrailLength = this.maxTrailPoints;
+        if (this.trailPoints.length > 0) {
+            const lastPoint = this.trailPoints[this.trailPoints.length - 1];
+            const distance = lastPoint.distanceTo(latLng); // meters
+            
+            // Only add point if moved more than ~50 meters for smoother animation
+            if (distance < 50) {
+                return;
+            }
+            
+            // Calculate speed-based trail length (simplified)
+            const speed = distance * 1.5; // Rough speed factor
+            const speedFactor = Math.min(speed / 800, 1); // Normalize speed
+            dynamicTrailLength = Math.round(3 + (6 * speedFactor)); // 3-9 points max
+        }
+        
+        // Add new point
+        this.trailPoints.push(latLng);
+        
+        // Limit trail length based on speed (much shorter for performance)
+        while (this.trailPoints.length > dynamicTrailLength) {
+            this.trailPoints.shift(); // Remove oldest point
+        }
+        
+        // Update trail immediately if visible for seamless animation
+        if (this.trailsVisible && this.trailPoints.length > 1) {
+            this.updateTrail();
+        }
+    }
+
+    /**
+     * Update trail with single polyline for better performance
+     */
+    private updateTrail(): void {
+        if (this.trailPoints.length < 2) {
+            return;
+        }
+
+        // Update existing polyline or create new one
+        if (this.trailPolyline) {
+            // Just update the coordinates for better performance
+            this.trailPolyline.setLatLngs(this.trailPoints);
+        } else {
+            // Create new polyline
+            this.trailPolyline = L.polyline(this.trailPoints, {
+                color: this.options.color || '#3388ff',
+                weight: 2,
+                opacity: 0.4, // Single opacity for performance
+                interactive: false,
+                smoothFactor: 1
+            });
+
+            // Add to map if trails are visible
+            if (this.trailsVisible) {
+                this.trailPolyline.addTo(this.map);
+            }
+        }
+    }
+
+    /**
+     * Show or hide the trail
+     */
+    public setTrailVisible(visible: boolean): this {
+        this.trailsVisible = visible;
+        
+        if (visible && this.trailPoints.length > 1) {
+            // Update and show trail
+            this.updateTrail();
+        } else if (this.trailPolyline) {
+            // Hide trail
+            this.trailPolyline.remove();
+        }
+        return this;
+    }
+
+    /**
+     * Clear the trail
+     */
+    public clearTrail(): this {
+        this.trailPoints = [];
+        // Remove trail polyline
+        if (this.trailPolyline) {
+            this.trailPolyline.remove();
+            this.trailPolyline = null;
+        }
+        this.lastSpeed = 0;
         return this;
     }
 
@@ -345,11 +450,17 @@ class Dot {
         this.currentAnimationTime = 0;
         this.animationStartTime = 0;
         this.isAnimationPaused = false;
+        
+        // Clear trail when resetting
+        this.clearTrail();
 
-        // Reset to initial position if we have positions
+        // Reset to initial position if we have positions (without adding to trail)
         if (this.positions.length > 0) {
             const initial = this.positions[0];
-            this.updatePosition([initial.lat, initial.lng]);
+            this.position = [initial.lat, initial.lng];
+            if (this.marker) {
+                this.marker.setLatLng([initial.lat, initial.lng]);
+            }
 
             // Update initial options
             const initialOptions: Partial<DotOptions> = {};
@@ -415,6 +526,7 @@ class Dot {
 
     public remove(): this {
         this.stopAnimation();
+        this.clearTrail(); // Clean up trail when removing dot
         if (this.marker) {
             this.marker.remove();
             this.marker = null;

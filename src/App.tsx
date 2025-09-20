@@ -16,6 +16,7 @@ const App: React.FC = () => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [planesVisible, setPlanesVisible] = useState(true);
     const [tracksVisible, setTracksVisible] = useState(false);
+    const [trailsVisible, setTrailsVisible] = useState(false);
     const [colourSettings, setColourSettings] = useState(true);
     
     // Airport filtering state
@@ -135,7 +136,7 @@ const App: React.FC = () => {
         });
     }, [isPlaying, speed, dots]);
 
-    // Apply all filtering (airport and altitude)
+    // Apply all filtering (airport, altitude) and visibility controls
     useEffect(() => {
         dots.forEach(dot => {
             const airportMatch = !airportFilterEnabled || dot.matchesAirportFilter(airportFilter, filterType);
@@ -155,8 +156,15 @@ const App: React.FC = () => {
             } else {
                 dot.hideTracks();
             }
+            
+            // Handle trail visibility
+            if (trailsVisible && shouldShow) {
+                dot.setTrailVisible(true);
+            } else {
+                dot.setTrailVisible(false);
+            }
         });
-    }, [airportFilterEnabled, airportFilter, filterType, altitudeFilterEnabled, debouncedAltitudeRange, dots, planesVisible, tracksVisible]);
+    }, [airportFilterEnabled, airportFilter, filterType, altitudeFilterEnabled, debouncedAltitudeRange, dots, planesVisible, tracksVisible, trailsVisible]);
 
     useEffect(() => {
         return () => {
@@ -255,6 +263,19 @@ const App: React.FC = () => {
                                 }}
                             />
                             Display Tracks
+                        </label>
+
+                        <label className="checkbox-label">
+                            <input
+                                type="checkbox"
+                                checked={trailsVisible}
+                                onChange={() => {
+                                    const newVisibility = !trailsVisible;
+                                    setTrailsVisible(newVisibility);
+                                    // The filtering useEffect will handle the actual visibility logic
+                                }}
+                            />
+                            Display Trails
                         </label>
 
                         <label className="checkbox-label">
