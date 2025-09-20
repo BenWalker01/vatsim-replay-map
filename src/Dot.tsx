@@ -1,5 +1,5 @@
 import L from 'leaflet';
-import { douglasPeucker, getColourByAlt, getColorFromAtc } from './utils';
+import { douglasPeucker, getColourByAlt, getColorFromAtc, parseAirportFilter, matchesAnyAirportPattern } from './utils';
 
 // Define position with timing information
 export interface TimedPosition {
@@ -20,6 +20,7 @@ interface DotOptions {
     altitude?: number;
     heading?: number;
     dest?: string;
+    dep?: string;
 }
 
 class Dot {
@@ -50,6 +51,7 @@ class Dot {
             altitude: options.altitude,
             heading: options.heading,
             dest: options.dest,
+            dep: options.dep,
         };
         this.trackSegments = L.layerGroup();
 
@@ -435,6 +437,46 @@ class Dot {
 
     public toggleColourSettings() {
         this.colourSettings = !this.colourSettings;
+    }
+
+    /**
+     * Check if this dot matches the airport filter criteria
+     * @param airportFilterString Comma-separated airport codes with optional wildcards (e.g., "EGLL,EG*,KJFK")
+     * @param filterType Whether to filter by departure ('dep'), arrival ('arr'), or both ('both')
+     * @returns true if the dot matches the filter criteria
+     */
+    public matchesAirportFilter(airportFilterString: string, filterType: 'dep' | 'arr' | 'both'): boolean {
+        if (!airportFilterString.trim()) return true; // No filter applied
+        
+        const patterns = parseAirportFilter(airportFilterString);
+        if (patterns.length === 0) return true;
+        
+        switch (filterType) {
+            case 'dep':
+                return this.options.dep ? matchesAnyAirportPattern(this.options.dep, patterns) : false;
+            case 'arr':
+                return this.options.dest ? matchesAnyAirportPattern(this.options.dest, patterns) : false;
+            case 'both':
+                const depMatches = this.options.dep ? matchesAnyAirportPattern(this.options.dep, patterns) : false;
+                const arrMatches = this.options.dest ? matchesAnyAirportPattern(this.options.dest, patterns) : false;
+                return depMatches || arrMatches;
+            default:
+                return true;
+        }
+    }
+
+    /**
+     * Get the departure airport for this dot
+     */
+    public getDeparture(): string | undefined {
+        return this.options.dep;
+    }
+
+    /**
+     * Get the destination airport for this dot
+     */
+    public getDestination(): string | undefined {
+        return this.options.dest;
     }
 }
 

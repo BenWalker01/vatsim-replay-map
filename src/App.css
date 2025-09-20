@@ -3,6 +3,7 @@
   --primary: #201e1f;
   --secondary: #6b7a89;
   --hover: #569ba998;
+  --accent: #569ba9;
   --text: #cdbca8;
   --bg-dark: #050505;
   --shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08);
@@ -152,6 +153,7 @@ nav {
   gap: 1.25rem;
   margin-left: 1.25rem;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .checkbox-label {
@@ -195,6 +197,63 @@ nav {
 
 .checkbox-label:hover input[type="checkbox"] {
   border-color: var(--accent);
+}
+
+/* Airport Filter Styles */
+.airport-filter-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.airport-filter-controls {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-left: 1.625rem; /* Align with checkbox text */
+}
+
+.airport-input {
+  background-color: var(--secondary);
+  color: var(--text);
+  border: 1px solid var(--hover);
+  border-radius: 0.25rem;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.875rem;
+  width: 200px;
+  text-transform: uppercase;
+}
+
+.airport-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(86, 155, 169, 0.2);
+}
+
+.airport-input::placeholder {
+  color: var(--text);
+  opacity: 0.7;
+  text-transform: none;
+}
+
+.filter-type-select {
+  background-color: var(--secondary);
+  color: var(--text);
+  border: 1px solid var(--hover);
+  border-radius: 0.25rem;
+  padding: 0.375rem 0.5rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.filter-help-text {
+  font-size: 0.75rem;
+  color: var(--text);
+  opacity: 0.8;
+  margin-left: 1.625rem;
+  margin-top: 0.25rem;
+  font-style: italic;
 }
 
 /* Responsive adjustments */

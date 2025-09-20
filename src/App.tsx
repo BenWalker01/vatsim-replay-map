@@ -16,6 +16,11 @@ const App: React.FC = () => {
     const [planesVisible, setPlanesVisible] = useState(true);
     const [tracksVisible, setTracksVisible] = useState(false);
     const [colourSettings, setColourSettings] = useState(true);
+    
+    // Airport filtering state
+    const [airportFilter, setAirportFilter] = useState('');
+    const [filterType, setFilterType] = useState<'dep' | 'arr' | 'both'>('dep');
+    const [airportFilterEnabled, setAirportFilterEnabled] = useState(false);
 
 
     const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -45,7 +50,7 @@ const App: React.FC = () => {
 
                         const flightPlan = processedData.fplans && processedData.fplans[callsign];
                         const destination = flightPlan ? flightPlan.dest : '';
-
+                        const departure = flightPlan ? flightPlan.dep : '';
 
                         const dot = new Dot(
                             leafletMapRef.current!,
@@ -54,6 +59,7 @@ const App: React.FC = () => {
                                 callsign: callsign,
                                 altitude: firstPos.altitude,
                                 dest: destination,
+                                dep: departure,
                             }
                         ).draw();
 
@@ -67,8 +73,6 @@ const App: React.FC = () => {
                     }).filter(Boolean) as Dot[]; // Filter out null values
 
                     setDots(newDots);
-
-
                 }
             }
         };
@@ -108,6 +112,27 @@ const App: React.FC = () => {
             }
         });
     }, [isPlaying, speed, dots]);
+
+    // Apply airport filtering
+    useEffect(() => {
+        dots.forEach(dot => {
+            const shouldShow = !airportFilterEnabled || dot.matchesAirportFilter(airportFilter, filterType);
+            
+            // Handle plane visibility
+            if (planesVisible && shouldShow) {
+                dot.setVisible(true);
+            } else {
+                dot.setVisible(false);
+            }
+            
+            // Handle track visibility
+            if (tracksVisible && shouldShow) {
+                dot.displayTracks();
+            } else {
+                dot.hideTracks();
+            }
+        });
+    }, [airportFilterEnabled, airportFilter, filterType, dots, planesVisible, tracksVisible]);
 
     useEffect(() => {
         return () => {
@@ -185,7 +210,7 @@ const App: React.FC = () => {
                                 onChange={() => {
                                     const newVisibility = !planesVisible;
                                     setPlanesVisible(newVisibility);
-                                    dots.forEach(dot => dot.setVisible(newVisibility));
+                                    // The airport filter useEffect will handle the actual visibility logic
                                 }}
                             />
                             Display Planes
@@ -198,11 +223,7 @@ const App: React.FC = () => {
                                 onChange={() => {
                                     const newVisibility = !tracksVisible;
                                     setTracksVisible(newVisibility);
-                                    if (!tracksVisible) {
-                                        dots.forEach(dot => dot.displayTracks());
-                                    } else {
-                                        dots.forEach(dot => dot.hideTracks());
-                                    }
+                                    // The airport filter useEffect will handle the actual visibility logic
                                 }}
                             />
                             Display Tracks
@@ -222,6 +243,39 @@ const App: React.FC = () => {
                             />
                             Colour by altitude (on) / destination (off)
                         </label>
+
+                        <div className="airport-filter-container">
+                            <label className="checkbox-label">
+                                <input
+                                    type="checkbox"
+                                    checked={airportFilterEnabled}
+                                    onChange={() => setAirportFilterEnabled(!airportFilterEnabled)}
+                                />
+                                Filter by Airport
+                            </label>
+                            
+                            {airportFilterEnabled && (
+                                <div className="airport-filter-controls">
+                                    <input
+                                        type="text"
+                                        placeholder="Airport(s): EGLL, EG*, KJFK"
+                                        value={airportFilter}
+                                        onChange={(e) => setAirportFilter(e.target.value.toUpperCase())}
+                                        className="airport-input"
+                                        style={{ width: '200px' }}
+                                    />
+                                    <select 
+                                        value={filterType} 
+                                        onChange={(e) => setFilterType(e.target.value as 'dep' | 'arr' | 'both')}
+                                        className="filter-type-select"
+                                    >
+                                        <option value="dep">Departure</option>
+                                        <option value="arr">Arrival</option>
+                                        <option value="both">Both</option>
+                                    </select>
+                                </div>
+                            )}
+                          </div>
 
                     </div>
 
