@@ -21,18 +21,48 @@ const App: React.FC = () => {
     const [heatMapVisible, setHeatMapVisible] = useState(false);
     const [colourSettings, setColourSettings] = useState(true);
     
+    // Timeline state
+    const [currentTime, setCurrentTime] = useState(0);
+    const [totalDuration, setTotalDuration] = useState(0);
+    const [replayStartTime, setReplayStartTime] = useState(0);
+    const [isDragging, setIsDragging] = useState(false);
+    
     // Airport filtering state
     const [airportFilter, setAirportFilter] = useState('');
     const [filterType, setFilterType] = useState<'dep' | 'arr' | 'both'>('dep');
     const [airportFilterEnabled, setAirportFilterEnabled] = useState(false);
+    const [airportFilterExpanded, setAirportFilterExpanded] = useState(false);
     
     // Altitude filtering state
     const [altitudeRange, setAltitudeRange] = useState<[number, number]>([0, 45000]);
     const [altitudeFilterEnabled, setAltitudeFilterEnabled] = useState(false);
+    const [altitudeFilterExpanded, setAltitudeFilterExpanded] = useState(false);
     const [debouncedAltitudeRange, setDebouncedAltitudeRange] = useState<[number, number]>([0, 45000]);
     const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const heatMapRef = useRef<any>(null); // Reference to heat map layer
     const heatMapUpdateTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Bottom bar collapse state
+    const [bottomBarCollapsed, setBottomBarCollapsed] = useState(false);
+
+    // Handlers for filter enable/disable with smart expansion
+    const handleAirportFilterToggle = useCallback(() => {
+        const newEnabled = !airportFilterEnabled;
+        setAirportFilterEnabled(newEnabled);
+        // Auto-expand when enabling for first time, but don't auto-collapse when disabling
+        if (newEnabled && !airportFilterExpanded) {
+            setAirportFilterExpanded(true);
+        }
+    }, [airportFilterEnabled, airportFilterExpanded]);
+
+    const handleAltitudeFilterToggle = useCallback(() => {
+        const newEnabled = !altitudeFilterEnabled;
+        setAltitudeFilterEnabled(newEnabled);
+        // Auto-expand when enabling for first time, but don't auto-collapse when disabling
+        if (newEnabled && !altitudeFilterExpanded) {
+            setAltitudeFilterExpanded(true);
+        }
+    }, [altitudeFilterEnabled, altitudeFilterExpanded]);
 
     // Debounced altitude range update for performance
     const handleAltitudeRangeChange = useCallback((newRange: [number, number]) => {
@@ -100,6 +130,29 @@ const App: React.FC = () => {
                     }).filter(Boolean) as Dot[]; // Filter out null values
 
                     setDots(newDots);
+                    
+                    // Calculate start time and total duration for relative timeline
+                    if (newDots.length > 0) {
+                        // Get all first times from all aircraft
+                        const allFirstTimes = newDots.map(dot => {
+                            const positions = (dot as any).positions;
+                            return positions.length > 0 ? positions[0].time : 0;
+                        }).filter(time => time > 0);
+                        
+                        // Get all last times from all aircraft
+                        const allLastTimes = newDots.map(dot => dot.getTotalDuration());
+                        
+                        const minStartTime = Math.min(...allFirstTimes);
+                        const maxEndTime = Math.max(...allLastTimes);
+                        
+                        setReplayStartTime(minStartTime);
+                        setTotalDuration(maxEndTime - minStartTime);
+                        setCurrentTime(0); // Reset timeline to start
+                    } else {
+                        setReplayStartTime(0);
+                        setTotalDuration(0);
+                        setCurrentTime(0);
+                    }
                 }
             }
         };
@@ -152,6 +205,35 @@ const App: React.FC = () => {
             heatMapRef.current.setLatLngs(heatMapData);
         }
     }, [heatMapVisible, dots, airportFilterEnabled, airportFilter, filterType, altitudeFilterEnabled, debouncedAltitudeRange]);
+
+    // Timeline update during playback
+    useEffect(() => {
+        if (!isPlaying || isDragging) return;
+
+        const updateTimeline = () => {
+            if (dots.length > 0) {
+                const currentTimes = dots.map(dot => dot.getCurrentTime());
+                const maxCurrentTime = Math.max(...currentTimes);
+                // Convert absolute time to relative time
+                const relativeTime = Math.max(0, maxCurrentTime - replayStartTime);
+                setCurrentTime(relativeTime);
+            }
+        };
+
+        const timelineInterval = setInterval(updateTimeline, 100); // Update 10 times per second
+
+        return () => clearInterval(timelineInterval);
+    }, [isPlaying, isDragging, dots, replayStartTime]);
+
+    // Handle timeline seeking
+    const handleTimelineSeek = useCallback((newTime: number) => {
+        setCurrentTime(newTime);
+        // Convert relative time back to absolute time for seeking
+        const absoluteTime = newTime + replayStartTime;
+        dots.forEach(dot => {
+            dot.seekToTime(absoluteTime);
+        });
+    }, [dots, replayStartTime]);
 
     // Control playback based on UI
     useEffect(() => {
@@ -270,7 +352,7 @@ const App: React.FC = () => {
 
 
     return (
-        <div className="app-container">
+        <div className={`app-container ${bottomBarCollapsed ? 'footer-collapsed' : ''}`}>
             <header className="header">
                 <h1>VATSIM Replay Map</h1>
                 <div className="wip-banner" style={{
@@ -306,28 +388,110 @@ const App: React.FC = () => {
 
             <div ref={mapRef} className="map-container"></div> {/* Map container */}
 
-
-            <footer className="toolbar">
+            <footer className={`toolbar ${bottomBarCollapsed ? 'collapsed' : ''}`}>
+                {/* Bottom bar toggle */}
+                <div className="bottom-bar-toggle">
+                    <button 
+                        className="collapse-button"
+                        onClick={() => setBottomBarCollapsed(!bottomBarCollapsed)}
+                        title={bottomBarCollapsed ? "Show Controls" : "Hide Controls"}
+                    >
+                        {bottomBarCollapsed ? '∧' : '∨'}
+                    </button>
+                </div>
                 <div className="replay-system">
                     <div className="playback-controls">
-                        <button onClick={() => setIsPlaying(!isPlaying)}>
-                            {isPlaying ? 'Pause' : 'Play'}
-                        </button>
-                        <button onClick={() => setSpeed((prevSpeed: number) => Math.max(0.5, prevSpeed / 2))}>
-                            -
-                        </button>
-                        <button onClick={() => setSpeed(1)}>
-                            {speed}x
-                        </button>
-                        <button onClick={() => setSpeed(prevSpeed => prevSpeed * 2)}>
-                            +
-                        </button>
-                        <button onClick={() => {
-                            setIsPlaying(false);
-                            dots.forEach(dot => dot.resetAnimation());
-                        }}>
-                            Reset
-                        </button>
+                        <div className="control-buttons">
+                            <button onClick={() => setIsPlaying(!isPlaying)}>
+                                {isPlaying ? 'Pause' : 'Play'}
+                            </button>
+                            <button onClick={() => setSpeed((prevSpeed: number) => Math.max(0.5, prevSpeed / 2))}>
+                                -
+                            </button>
+                            <button onClick={() => setSpeed(1)}>
+                                {speed}x
+                            </button>
+                            <button onClick={() => setSpeed(prevSpeed => prevSpeed * 2)}>
+                                +
+                            </button>
+                            <button onClick={() => {
+                                setIsPlaying(false);
+                                dots.forEach(dot => dot.resetAnimation());
+                            }}>
+                                Reset
+                            </button>
+                        </div>
+                        
+                        <div className="timeline-container">
+                            <div className="timeline-time">
+                                {(() => {
+                                    const minutes = Math.floor(currentTime / 60);
+                                    const seconds = Math.floor(currentTime % 60);
+                                    return minutes > 0 
+                                        ? `${minutes}:${seconds.toString().padStart(2, '0')}`
+                                        : `0:${seconds.toString().padStart(2, '0')}`;
+                                })()}
+                            </div>
+                            <div className="timeline-wrapper">
+                                <div 
+                                    className="timeline-track"
+                                    onClick={(e) => {
+                                        if (totalDuration > 0) {
+                                            const rect = e.currentTarget.getBoundingClientRect();
+                                            const clickX = e.clientX - rect.left;
+                                            const percentage = clickX / rect.width;
+                                            const targetTime = percentage * totalDuration;
+                                            handleTimelineSeek(targetTime);
+                                        }
+                                    }}
+                                >
+                                    <div 
+                                        className="timeline-progress"
+                                        style={{ 
+                                            width: totalDuration > 0 ? `${(currentTime / totalDuration) * 100}%` : '0%' 
+                                        }}
+                                    />
+                                    <div 
+                                        className="timeline-handle"
+                                        style={{ 
+                                            left: totalDuration > 0 ? `${(currentTime / totalDuration) * 100}%` : '0%' 
+                                        }}
+                                        onMouseDown={(e) => {
+                                            setIsDragging(true);
+                                            const startX = e.clientX;
+                                            const startTime = currentTime;
+                                            const track = e.currentTarget.parentElement as HTMLElement;
+                                            const trackRect = track.getBoundingClientRect();
+                                            
+                                            const handleMouseMove = (moveEvent: MouseEvent) => {
+                                                const deltaX = moveEvent.clientX - startX;
+                                                const percentage = deltaX / trackRect.width;
+                                                const newTime = Math.max(0, Math.min(totalDuration, startTime + (percentage * totalDuration)));
+                                                handleTimelineSeek(newTime);
+                                            };
+                                            
+                                            const handleMouseUp = () => {
+                                                setIsDragging(false);
+                                                document.removeEventListener('mousemove', handleMouseMove);
+                                                document.removeEventListener('mouseup', handleMouseUp);
+                                            };
+                                            
+                                            document.addEventListener('mousemove', handleMouseMove);
+                                            document.addEventListener('mouseup', handleMouseUp);
+                                        }}
+                                    />
+                                </div>
+                            </div>
+                            <div className="timeline-duration">
+                                {(() => {
+                                    const minutes = Math.floor(totalDuration / 60);
+                                    const seconds = Math.floor(totalDuration % 60);
+                                    return minutes > 0 
+                                        ? `${minutes}:${seconds.toString().padStart(2, '0')}`
+                                        : `0:${seconds.toString().padStart(2, '0')}`;
+                                })()}
+                            </div>
+                        </div>
                     </div>
 
                     <div className="visibility-controls">
@@ -397,17 +561,22 @@ const App: React.FC = () => {
                             Colour by altitude (on) / destination (off)
                         </label>
 
-                        <div className="airport-filter-container">
-                            <label className="checkbox-label">
+                        <div className={`filter-panel ${airportFilterExpanded ? 'expanded' : 'collapsed'} ${airportFilterEnabled && !airportFilterExpanded ? 'active' : ''}`}>
+                            <div className="filter-header" onClick={() => setAirportFilterExpanded(!airportFilterExpanded)}>
                                 <input
                                     type="checkbox"
                                     checked={airportFilterEnabled}
-                                    onChange={() => setAirportFilterEnabled(!airportFilterEnabled)}
+                                    onChange={handleAirportFilterToggle}
+                                    onClick={(e) => e.stopPropagation()}
                                 />
-                                Filter by Airport
-                            </label>
+                                <span className="filter-title">Airport Filter</span>
+                                {airportFilterEnabled && airportFilter && (
+                                    <span className="filter-badge">{airportFilter}</span>
+                                )}
+                                <span className={`filter-chevron ${airportFilterExpanded ? 'expanded' : ''}`}>›</span>
+                            </div>
                             
-                            {airportFilterEnabled && (
+                            <div className={`filter-content ${airportFilterExpanded ? 'show' : 'hide'}`}>
                                 <div className="airport-filter-controls">
                                     <input
                                         type="text"
@@ -427,20 +596,30 @@ const App: React.FC = () => {
                                         <option value="both">Both</option>
                                     </select>
                                 </div>
-                            )}
+                                <div className="filter-help-text">
+                                    Use wildcards (*) or comma-separated codes
+                                </div>
+                            </div>
                           </div>
 
-                        <div className="altitude-filter-container">
-                            <label className="checkbox-label">
+                        <div className={`filter-panel ${altitudeFilterExpanded ? 'expanded' : 'collapsed'} ${altitudeFilterEnabled && !altitudeFilterExpanded ? 'active' : ''}`}>
+                            <div className="filter-header" onClick={() => setAltitudeFilterExpanded(!altitudeFilterExpanded)}>
                                 <input
                                     type="checkbox"
                                     checked={altitudeFilterEnabled}
-                                    onChange={() => setAltitudeFilterEnabled(!altitudeFilterEnabled)}
+                                    onChange={handleAltitudeFilterToggle}
+                                    onClick={(e) => e.stopPropagation()}
                                 />
-                                Filter by Altitude
-                            </label>
+                                <span className="filter-title">Altitude Filter</span>
+                                {altitudeFilterEnabled && (
+                                    <span className="filter-badge">
+                                        {altitudeRange[0].toLocaleString()} - {altitudeRange[1].toLocaleString()} ft
+                                    </span>
+                                )}
+                                <span className={`filter-chevron ${altitudeFilterExpanded ? 'expanded' : ''}`}>›</span>
+                            </div>
                             
-                            {altitudeFilterEnabled && (
+                            <div className={`filter-content ${altitudeFilterExpanded ? 'show' : 'hide'}`}>
                                 <div className="altitude-filter-controls">
                                     <div className="altitude-slider-container">
                                         <ReactSlider
@@ -461,7 +640,7 @@ const App: React.FC = () => {
                                         </div>
                                     </div>
                                 </div>
-                            )}
+                            </div>
                         </div>
 
                     </div>

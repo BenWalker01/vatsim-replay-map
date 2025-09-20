@@ -558,6 +558,84 @@ class Dot {
         };
     }
 
+    /**
+     * Get the current animation time in milliseconds
+     */
+    public getCurrentTime(): number {
+        return this.currentAnimationTime;
+    }
+
+    /**
+     * Get the total duration of the animation in milliseconds
+     */
+    public getTotalDuration(): number {
+        if (this.positions.length === 0) return 0;
+        return this.positions[this.positions.length - 1].time;
+    }
+
+    /**
+     * Seek to a specific time in the animation
+     */
+    public seekToTime(targetTime: number): this {
+        if (this.positions.length === 0) return this;
+        
+        const totalDuration = this.getTotalDuration();
+        const clampedTime = Math.max(0, Math.min(targetTime, totalDuration));
+        
+        this.currentAnimationTime = clampedTime;
+        
+        // Find the appropriate position for this time
+        if (clampedTime <= this.positions[0].time) {
+            // Before start, hide or show at first position
+            if (clampedTime < this.positions[0].time) {
+                this.setVisible(false);
+            } else {
+                this.setVisible(true);
+                this.updatePosition([this.positions[0].lat, this.positions[0].lng]);
+            }
+        } else if (clampedTime >= totalDuration) {
+            // At end, hide the aircraft
+            this.setVisible(false);
+        } else {
+            // Find interpolated position
+            let nextIndex = this.positions.findIndex(pos => pos.time > clampedTime);
+            if (nextIndex === -1) nextIndex = this.positions.length - 1;
+            if (nextIndex === 0) nextIndex = 1;
+
+            const prevIndex = nextIndex - 1;
+            const prevPos = this.positions[prevIndex];
+            const nextPos = this.positions[nextIndex];
+
+            const segmentDuration = nextPos.time - prevPos.time;
+            const segmentProgress = segmentDuration > 0
+                ? (clampedTime - prevPos.time) / segmentDuration
+                : 1;
+
+            // Interpolate position
+            const newLat = prevPos.lat + (nextPos.lat - prevPos.lat) * segmentProgress;
+            const newLng = prevPos.lng + (nextPos.lng - prevPos.lng) * segmentProgress;
+
+            this.setVisible(true);
+            this.updatePosition([newLat, newLng]);
+
+            // Interpolate other properties if available
+            const newOptions: Partial<DotOptions> = {};
+            if (prevPos.altitude !== undefined && nextPos.altitude !== undefined) {
+                newOptions.altitude = Math.round(
+                    prevPos.altitude + (nextPos.altitude - prevPos.altitude) * segmentProgress
+                );
+            }
+            if (prevPos.heading !== undefined && nextPos.heading !== undefined) {
+                newOptions.heading = prevPos.heading + (nextPos.heading - prevPos.heading) * segmentProgress;
+            }
+            if (Object.keys(newOptions).length > 0) {
+                this.updateOptions(newOptions);
+            }
+        }
+        
+        return this;
+    }
+
     public remove(): this {
         this.stopAnimation();
         this.clearTrail(); // Clean up trail when removing dot
