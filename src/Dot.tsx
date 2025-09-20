@@ -1,5 +1,5 @@
 import L from 'leaflet';
-import { douglasPeucker, getColourByAlt, getColorFromAtc } from './utils';
+import { douglasPeucker, getColourByAlt, getColorFromAtc, parseAirportFilter, matchesAnyAirportPattern } from './utils';
 
 // Define position with timing information
 export interface TimedPosition {
@@ -20,6 +20,7 @@ interface DotOptions {
     altitude?: number;
     heading?: number;
     dest?: string;
+    dep?: string;
 }
 
 class Dot {
@@ -33,6 +34,14 @@ class Dot {
     private trackSegments: L.LayerGroup = L.layerGroup();
     private trackPath: L.Polyline | null = null;
     private colourSettings: boolean = true;
+    private currentAnimationTime: number = 0; // Track current animation progress in milliseconds
+    private animationStartTime: number = 0; // When the current animation session started
+    private isAnimationPaused: boolean = false;
+    private trailPoints: L.LatLng[] = []; // Store trail points for performance
+    private trailPolyline: L.Polyline | null = null; // Single polyline for better performance
+    private maxTrailPoints: number = 6; // Very short trail length for performance
+    private trailsVisible: boolean = false; // Track if trails should be visible
+    private lastSpeed: number = 0; // Track last calculated speed
 
 
     constructor(map: L.Map, position: L.LatLngExpression, options: DotOptions = {}) {
@@ -47,6 +56,7 @@ class Dot {
             altitude: options.altitude,
             heading: options.heading,
             dest: options.dest,
+            dep: options.dep,
         };
         this.trackSegments = L.layerGroup();
 
@@ -160,6 +170,154 @@ class Dot {
         if (this.marker) {
             this.marker.setLatLng(newPosition);
         }
+        
+        // Add point to trail for performance-optimized trail rendering
+        this.addTrailPoint(newPosition);
+        
+        return this;
+    }
+
+    /**
+     * Add a point to the trail with performance optimization and non-linear speed-based length
+     */
+    private addTrailPoint(position: L.LatLngExpression): void {
+        const latLng = L.latLng(position as any);
+        
+        // Calculate speed and adjust trail length with non-linear scaling
+        let dynamicTrailLength = 8; // Default trail length
+        if (this.trailPoints.length > 0) {
+            const lastPoint = this.trailPoints[this.trailPoints.length - 1];
+            const distance = lastPoint.distanceTo(latLng); // meters
+            
+            // Only add point if moved more than ~30 meters for smoother trails
+            if (distance < 30) {
+                return;
+            }
+            
+            // Calculate speed in rough knots
+            const speed = distance * 2; // Rough speed factor for aircraft
+            this.lastSpeed = speed; // Store for reference
+            
+            // Non-linear scaling using logarithmic and power functions
+            // This creates more natural trail behavior with smooth transitions
+            const speedKnots = Math.max(speed / 10, 1); // Normalize to ~1-600 knots, avoid division by zero
+            
+            // Use logarithmic scale for non-linear relationship
+            // log(speedKnots) creates natural curve where:
+            // - Small speed changes at low speeds have big trail effects
+            // - Large speed changes at high speeds have smaller trail effects
+            const logSpeed = Math.log(speedKnots + 1); // +1 to avoid log(0)
+            const maxLogSpeed = Math.log(601); // Max expected speed + 1
+            const normalizedLogSpeed = Math.min(logSpeed / maxLogSpeed, 1); // 0-1 range
+            
+            // Apply power function for additional non-linearity
+            // Using power of 0.7 creates a curve that:
+            // - Gives slow aircraft proportionally longer trails
+            // - Compresses trail differences for fast aircraft
+            const poweredSpeed = Math.pow(normalizedLogSpeed, 0.7);
+            
+            // Invert the relationship: high speed = short trail
+            const inverseFactor = 1 - poweredSpeed;
+            
+            // Map to trail length range with non-linear distribution
+            const minLength = 4;   // Very short for supersonic speeds
+            const maxLength = 36;  // Much longer for slow/stationary aircraft (2x previous)
+            
+            // Apply additional smoothing curve using sine function
+            // This creates very smooth transitions between speed ranges
+            const smoothFactor = Math.sin(inverseFactor * Math.PI / 2);
+            
+            dynamicTrailLength = Math.round(
+                minLength + (maxLength - minLength) * smoothFactor
+            );
+            
+            // Clamp to reasonable bounds
+            dynamicTrailLength = Math.max(minLength, Math.min(dynamicTrailLength, maxLength));
+        }
+        
+        // Add new point
+        this.trailPoints.push(latLng);
+        
+        // Limit trail length based on calculated dynamic length
+        while (this.trailPoints.length > dynamicTrailLength) {
+            this.trailPoints.shift(); // Remove oldest point
+        }
+        
+        // Update trail immediately if visible for seamless animation
+        if (this.trailsVisible && this.trailPoints.length > 1) {
+            this.updateTrail();
+        }
+    }
+
+    /**
+     * Update trail with single polyline for better performance and fade effect
+     */
+    private updateTrail(): void {
+        if (this.trailPoints.length < 2) {
+            return;
+        }
+
+        // Update existing polyline or create new one
+        if (this.trailPolyline) {
+            // Just update the coordinates for better performance
+            this.trailPolyline.setLatLngs(this.trailPoints);
+        } else {
+            // Get current color for the trail
+            const currentColor = this.options.color || '#3388ff';
+            
+            // Create new polyline with fade effect
+            this.trailPolyline = L.polyline(this.trailPoints, {
+                color: currentColor,
+                weight: 2,
+                opacity: 0.8, // Start more opaque
+                interactive: false,
+                smoothFactor: 1,
+                className: 'aircraft-trail' // Add class for CSS styling
+            });
+
+            // Add to map if trails are visible
+            if (this.trailsVisible) {
+                this.trailPolyline.addTo(this.map);
+            }
+        }
+        
+        // Update the trail color to match current aircraft color
+        if (this.trailPolyline) {
+            const currentColor = this.options.color || '#3388ff';
+            this.trailPolyline.setStyle({
+                color: currentColor,
+                opacity: 0.8
+            });
+        }
+    }
+
+    /**
+     * Show or hide the trail
+     */
+    public setTrailVisible(visible: boolean): this {
+        this.trailsVisible = visible;
+        
+        if (visible && this.trailPoints.length > 1) {
+            // Update and show trail
+            this.updateTrail();
+        } else if (this.trailPolyline) {
+            // Hide trail
+            this.trailPolyline.remove();
+        }
+        return this;
+    }
+
+    /**
+     * Clear the trail
+     */
+    public clearTrail(): this {
+        this.trailPoints = [];
+        // Remove trail polyline
+        if (this.trailPolyline) {
+            this.trailPolyline.remove();
+            this.trailPolyline = null;
+        }
+        this.lastSpeed = 0;
         return this;
     }
 
@@ -171,6 +329,9 @@ class Dot {
         // Ensure positions are sorted by time
         this.positions = [...positions].sort((a, b) => a.time - b.time);
         this.currentPositionIndex = 0;
+        this.currentAnimationTime = 0;
+        this.animationStartTime = 0;
+        this.isAnimationPaused = false;
 
         this.generateTracks();
 
@@ -195,8 +356,9 @@ class Dot {
      * Animate the dot according to its predefined positions and timings
      * @param speedFactor Speed multiplier (1 = normal, 2 = twice as fast)
      * @param onComplete Callback function when animation completes
+     * @param resumeFromCurrent Whether to resume from current position (default: true)
      */
-    public animate(speedFactor: number = 1, onComplete?: () => void): this {
+    public animate(speedFactor: number = 1, onComplete?: () => void, resumeFromCurrent: boolean = true): this {
         // Cancel any existing animation
         this.stopAnimation();
 
@@ -205,16 +367,28 @@ class Dot {
             return this;
         }
 
-        // Hide the marker initially if we're starting from time > 0
-        if (this.positions[0].time > 0 && this.marker) {
+        // If we're not resuming or if this is the first animation, reset to start
+        if (!resumeFromCurrent || this.currentAnimationTime === 0) {
+            this.currentAnimationTime = 0;
+            this.isAnimationPaused = false;
+        } else {
+            // We're resuming, so don't reset the current time
+            this.isAnimationPaused = false;
+        }
+
+        // Calculate the animation start time based on current progress and speed
+        this.animationStartTime = performance.now() - (this.currentAnimationTime / speedFactor);
+
+        // Hide the marker initially if we're at the very start and first position has delay
+        if (this.currentAnimationTime === 0 && this.positions[0].time > 0 && this.marker) {
             this.marker.setStyle({ opacity: 0, fillOpacity: 0 });
         }
 
-        const startTime = performance.now();
         const totalDuration = this.positions[this.positions.length - 1].time;
 
         const animate = (currentTime: number) => {
-            const elapsedTime = (currentTime - startTime) * speedFactor;
+            const elapsedTime = (currentTime - this.animationStartTime) * speedFactor;
+            this.currentAnimationTime = elapsedTime;
 
             // If we haven't reached the first position yet, keep the marker hidden
             if (elapsedTime < this.positions[0].time) {
@@ -246,9 +420,11 @@ class Dot {
                     this.updateOptions(finalOptions);
                 }
 
+                // Hide the plane and clear trail when animation is complete
                 this.setVisible(false);
-
+                this.clearTrail(); // Clear trail when plane disappears
                 this.animationId = null;
+                this.currentAnimationTime = totalDuration;
 
                 if (onComplete) {
                     onComplete();
@@ -256,7 +432,6 @@ class Dot {
                 return;
             }
 
-            // Rest of your existing animation code...
             // Find current position based on elapsed time
             // Find the positions before and after the current time
             let nextIndex = this.positions.findIndex(pos => pos.time > elapsedTime);
@@ -290,8 +465,8 @@ class Dot {
             }
 
             if (prevPos.heading !== undefined && nextPos.heading !== undefined) {
-                // Handle heading interpolation
-                // ...existing heading interpolation code...
+                // Handle heading interpolation (keeping existing logic)
+                newOptions.heading = prevPos.heading + (nextPos.heading - prevPos.heading) * segmentProgress;
             }
 
             if (Object.keys(newOptions).length > 0) {
@@ -312,7 +487,50 @@ class Dot {
         if (this.animationId !== null) {
             cancelAnimationFrame(this.animationId);
             this.animationId = null;
+            this.isAnimationPaused = true;
         }
+        return this;
+    }
+
+    /**
+     * Reset the animation to the beginning
+     */
+    public resetAnimation(): this {
+        this.stopAnimation();
+        this.currentAnimationTime = 0;
+        this.animationStartTime = 0;
+        this.isAnimationPaused = false;
+        
+        // Clear trail when resetting
+        this.clearTrail();
+
+        // Reset to initial position if we have positions (without adding to trail)
+        if (this.positions.length > 0) {
+            const initial = this.positions[0];
+            this.position = [initial.lat, initial.lng];
+            if (this.marker) {
+                this.marker.setLatLng([initial.lat, initial.lng]);
+            }
+
+            // Update initial options
+            const initialOptions: Partial<DotOptions> = {};
+            if (initial.altitude !== undefined) initialOptions.altitude = initial.altitude;
+            if (initial.heading !== undefined) initialOptions.heading = initial.heading;
+            if (Object.keys(initialOptions).length > 0) {
+                this.updateOptions(initialOptions);
+            }
+
+            // Hide the marker if the first position has a start time > 0
+            if (this.marker && initial.time > 0) {
+                this.marker.setStyle({ opacity: 0, fillOpacity: 0 });
+            } else if (this.marker) {
+                this.marker.setStyle({
+                    opacity: 1,
+                    fillOpacity: this.options.fillOpacity || 0.8
+                });
+            }
+        }
+
         return this;
     }
 
@@ -353,11 +571,111 @@ class Dot {
                 fillOpacity: visible ? (this.options.fillOpacity || 0.8) : 0
             });
         }
+        
+        // Also hide/show trail when hiding/showing the plane
+        if (!visible && this.trailPolyline) {
+            this.trailPolyline.remove();
+        } else if (visible && this.trailsVisible && this.trailPolyline && this.trailPoints.length > 1) {
+            this.trailPolyline.addTo(this.map);
+        }
+        
+        return this;
+    }
+
+    /**
+     * Get the current position of the aircraft
+     */
+    public getCurrentPosition(): { lat: number; lng: number } | null {
+        if (!this.marker) return null;
+        
+        const latLng = this.marker.getLatLng();
+        return {
+            lat: latLng.lat,
+            lng: latLng.lng
+        };
+    }
+
+    /**
+     * Get the current animation time in milliseconds
+     */
+    public getCurrentTime(): number {
+        return this.currentAnimationTime;
+    }
+
+    /**
+     * Get the total duration of the animation in milliseconds
+     */
+    public getTotalDuration(): number {
+        if (this.positions.length === 0) return 0;
+        return this.positions[this.positions.length - 1].time;
+    }
+
+    /**
+     * Seek to a specific time in the animation
+     */
+    public seekToTime(targetTime: number): this {
+        if (this.positions.length === 0) return this;
+        
+        const totalDuration = this.getTotalDuration();
+        const clampedTime = Math.max(0, Math.min(targetTime, totalDuration));
+        
+        this.currentAnimationTime = clampedTime;
+        
+        // Find the appropriate position for this time
+        if (clampedTime <= this.positions[0].time) {
+            // Before start, hide or show at first position
+            if (clampedTime < this.positions[0].time) {
+                this.setVisible(false);
+            } else {
+                this.setVisible(true);
+                this.updatePosition([this.positions[0].lat, this.positions[0].lng]);
+            }
+        } else if (clampedTime >= totalDuration) {
+            // At end, hide the aircraft
+            this.setVisible(false);
+        } else {
+            // Find interpolated position
+            let nextIndex = this.positions.findIndex(pos => pos.time > clampedTime);
+            if (nextIndex === -1) nextIndex = this.positions.length - 1;
+            if (nextIndex === 0) nextIndex = 1;
+
+            const prevIndex = nextIndex - 1;
+            const prevPos = this.positions[prevIndex];
+            const nextPos = this.positions[nextIndex];
+
+            const segmentDuration = nextPos.time - prevPos.time;
+            const segmentProgress = segmentDuration > 0
+                ? (clampedTime - prevPos.time) / segmentDuration
+                : 1;
+
+            // Interpolate position
+            const newLat = prevPos.lat + (nextPos.lat - prevPos.lat) * segmentProgress;
+            const newLng = prevPos.lng + (nextPos.lng - prevPos.lng) * segmentProgress;
+
+            this.setVisible(true);
+            this.updatePosition([newLat, newLng]);
+
+            // Interpolate other properties if available
+            const newOptions: Partial<DotOptions> = {};
+            if (prevPos.altitude !== undefined && nextPos.altitude !== undefined) {
+                newOptions.altitude = Math.round(
+                    prevPos.altitude + (nextPos.altitude - prevPos.altitude) * segmentProgress
+                );
+            }
+            if (prevPos.heading !== undefined && nextPos.heading !== undefined) {
+                newOptions.heading = prevPos.heading + (nextPos.heading - prevPos.heading) * segmentProgress;
+            }
+            if (Object.keys(newOptions).length > 0) {
+                this.updateOptions(newOptions);
+            }
+        }
+        
         return this;
     }
 
     public remove(): this {
         this.stopAnimation();
+        this.clearTrail(); // Clean up trail when removing dot
         if (this.marker) {
             this.marker.remove();
             this.marker = null;
@@ -380,6 +698,59 @@ class Dot {
 
     public toggleColourSettings() {
         this.colourSettings = !this.colourSettings;
+    }
+
+    /**
+     * Check if this dot matches the airport filter criteria
+     * @param airportFilterString Comma-separated airport codes with optional wildcards (e.g., "EGLL,EG*,KJFK")
+     * @param filterType Whether to filter by departure ('dep'), arrival ('arr'), or both ('both')
+     * @returns true if the dot matches the filter criteria
+     */
+    public matchesAirportFilter(airportFilterString: string, filterType: 'dep' | 'arr' | 'both'): boolean {
+        if (!airportFilterString.trim()) return true; // No filter applied
+        
+        const patterns = parseAirportFilter(airportFilterString);
+        if (patterns.length === 0) return true;
+        
+        switch (filterType) {
+            case 'dep':
+                return this.options.dep ? matchesAnyAirportPattern(this.options.dep, patterns) : false;
+            case 'arr':
+                return this.options.dest ? matchesAnyAirportPattern(this.options.dest, patterns) : false;
+            case 'both':
+                const depMatches = this.options.dep ? matchesAnyAirportPattern(this.options.dep, patterns) : false;
+                const arrMatches = this.options.dest ? matchesAnyAirportPattern(this.options.dest, patterns) : false;
+                return depMatches || arrMatches;
+            default:
+                return true;
+        }
+    }
+
+    /**
+     * Get the departure airport for this dot
+     */
+    public getDeparture(): string | undefined {
+        return this.options.dep;
+    }
+
+    /**
+     * Get the destination airport for this dot
+     */
+    public getDestination(): string | undefined {
+        return this.options.dest;
+    }
+
+    /**
+     * Check if this dot's altitude is within the specified range
+     * @param minAltitude Minimum altitude (inclusive)
+     * @param maxAltitude Maximum altitude (inclusive)
+     * @returns true if the dot's altitude is within range
+     */
+    public isWithinAltitudeRange(minAltitude: number, maxAltitude: number): boolean {
+        const altitude = this.options.altitude;
+        if (altitude === undefined) return true; // Show dots without altitude data
+        
+        return altitude >= minAltitude && altitude <= maxAltitude;
     }
 }
 

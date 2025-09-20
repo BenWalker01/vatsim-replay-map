@@ -100,3 +100,51 @@ export const findNextCallsignOffset = (callsign: string, replayLog: { [fileName:
   }
   return -1; // Return -1 if the callsign is not found
 };
+
+/**
+ * Parse airport filter string into individual patterns
+ * Supports comma-separated airports and wildcards
+ * Examples: "EGLL,KJFK", "EG*", "EGLL,EG*,KJFK"
+ */
+export const parseAirportFilter = (filterString: string): string[] => {
+  if (!filterString.trim()) return [];
+  
+  return filterString
+    .split(',')
+    .map(airport => airport.trim().toUpperCase())
+    .filter(airport => airport.length > 0);
+};
+
+/**
+ * Check if an airport code matches a pattern (supports wildcards)
+ * Examples:
+ * - "EGLL" matches "EGLL" exactly
+ * - "EGLL" matches "EG*" pattern
+ * - "KJFK" matches "K*" pattern
+ */
+export const matchesAirportPattern = (airportCode: string, pattern: string): boolean => {
+  if (!airportCode || !pattern) return false;
+  
+  const code = airportCode.toUpperCase();
+  const pat = pattern.toUpperCase();
+  
+  // Exact match
+  if (code === pat) return true;
+  
+  // Wildcard match
+  if (pat.includes('*')) {
+    const prefix = pat.replace('*', '');
+    return code.startsWith(prefix);
+  }
+  
+  return false;
+};
+
+/**
+ * Check if an airport code matches any of the provided patterns
+ */
+export const matchesAnyAirportPattern = (airportCode: string, patterns: string[]): boolean => {
+  if (!patterns.length) return true; // No filter = show all
+  
+  return patterns.some(pattern => matchesAirportPattern(airportCode, pattern));
+};
