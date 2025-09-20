@@ -262,6 +262,17 @@ nav {
   transform: translateY(-1px);
 }
 
+/* Aircraft Trail Fade Effect */
+.aircraft-trail {
+  background: linear-gradient(to left, transparent 0%, currentColor 70%, currentColor 100%);
+  opacity: 0.8;
+}
+
+.leaflet-overlay-pane .aircraft-trail {
+  mask: linear-gradient(to left, transparent 0%, black 30%, black 100%);
+  -webkit-mask: linear-gradient(to left, transparent 0%, black 30%, black 100%);
+}
+
 /* Modern Replay Controls */
 .replay-system {
   display: flex;

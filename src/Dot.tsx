@@ -178,7 +178,7 @@ class Dot {
     }
 
     /**
-     * Add a point to the trail with performance optimization and speed-based length
+     * Add a point to the trail with performance optimization and non-linear speed-based length
      */
     private addTrailPoint(position: L.LatLngExpression): void {
         const latLng = L.latLng(position as any);
@@ -189,32 +189,56 @@ class Dot {
             const lastPoint = this.trailPoints[this.trailPoints.length - 1];
             const distance = lastPoint.distanceTo(latLng); // meters
             
-            // Only add point if moved more than ~50 meters for smoother animation
-            if (distance < 50) {
+            // Only add point if moved more than ~30 meters for smoother trails
+            if (distance < 30) {
                 return;
             }
             
-            // Calculate speed-based trail length with inverse relationship
-            const speed = distance * 1.5; // Rough speed factor
+            // Calculate speed in rough knots
+            const speed = distance * 2; // Rough speed factor for aircraft
+            this.lastSpeed = speed; // Store for reference
             
-            // Non-linear scaling: slower speeds get longer trails, faster speeds get shorter trails
-            // Using inverse square root for smooth non-linear relationship
-            const normalizedSpeed = Math.min(speed / 1000, 1); // Normalize speed (0-1)
+            // Non-linear scaling using logarithmic and power functions
+            // This creates more natural trail behavior with smooth transitions
+            const speedKnots = Math.max(speed / 10, 1); // Normalize to ~1-600 knots, avoid division by zero
             
-            // Inverse relationship: high speed = short trail, low speed = long trail
-            // Using 1 - sqrt(speed) for smoother curve
-            const speedFactor = 1 - Math.sqrt(normalizedSpeed);
+            // Use logarithmic scale for non-linear relationship
+            // log(speedKnots) creates natural curve where:
+            // - Small speed changes at low speeds have big trail effects
+            // - Large speed changes at high speeds have smaller trail effects
+            const logSpeed = Math.log(speedKnots + 1); // +1 to avoid log(0)
+            const maxLogSpeed = Math.log(601); // Max expected speed + 1
+            const normalizedLogSpeed = Math.min(logSpeed / maxLogSpeed, 1); // 0-1 range
             
-            // Trail length: 5 points (fast) to 12 points (slow/stationary)
-            const minLength = 5;  // Minimum for fast aircraft
-            const maxLength = 12; // Maximum for slow aircraft
-            dynamicTrailLength = Math.round(minLength + (maxLength - minLength) * speedFactor);
+            // Apply power function for additional non-linearity
+            // Using power of 0.7 creates a curve that:
+            // - Gives slow aircraft proportionally longer trails
+            // - Compresses trail differences for fast aircraft
+            const poweredSpeed = Math.pow(normalizedLogSpeed, 0.7);
+            
+            // Invert the relationship: high speed = short trail
+            const inverseFactor = 1 - poweredSpeed;
+            
+            // Map to trail length range with non-linear distribution
+            const minLength = 4;   // Very short for supersonic speeds
+            const maxLength = 36;  // Much longer for slow/stationary aircraft (2x previous)
+            
+            // Apply additional smoothing curve using sine function
+            // This creates very smooth transitions between speed ranges
+            const smoothFactor = Math.sin(inverseFactor * Math.PI / 2);
+            
+            dynamicTrailLength = Math.round(
+                minLength + (maxLength - minLength) * smoothFactor
+            );
+            
+            // Clamp to reasonable bounds
+            dynamicTrailLength = Math.max(minLength, Math.min(dynamicTrailLength, maxLength));
         }
         
         // Add new point
         this.trailPoints.push(latLng);
         
-        // Limit trail length based on speed (non-linear relationship)
+        // Limit trail length based on calculated dynamic length
         while (this.trailPoints.length > dynamicTrailLength) {
             this.trailPoints.shift(); // Remove oldest point
         }
@@ -226,7 +250,7 @@ class Dot {
     }
 
     /**
-     * Update trail with single polyline for better performance
+     * Update trail with single polyline for better performance and fade effect
      */
     private updateTrail(): void {
         if (this.trailPoints.length < 2) {
@@ -238,19 +262,32 @@ class Dot {
             // Just update the coordinates for better performance
             this.trailPolyline.setLatLngs(this.trailPoints);
         } else {
-            // Create new polyline
+            // Get current color for the trail
+            const currentColor = this.options.color || '#3388ff';
+            
+            // Create new polyline with fade effect
             this.trailPolyline = L.polyline(this.trailPoints, {
-                color: this.options.color || '#3388ff',
+                color: currentColor,
                 weight: 2,
-                opacity: 0.4, // Single opacity for performance
+                opacity: 0.8, // Start more opaque
                 interactive: false,
-                smoothFactor: 1
+                smoothFactor: 1,
+                className: 'aircraft-trail' // Add class for CSS styling
             });
 
             // Add to map if trails are visible
             if (this.trailsVisible) {
                 this.trailPolyline.addTo(this.map);
             }
+        }
+        
+        // Update the trail color to match current aircraft color
+        if (this.trailPolyline) {
+            const currentColor = this.options.color || '#3388ff';
+            this.trailPolyline.setStyle({
+                color: currentColor,
+                opacity: 0.8
+            });
         }
     }
 
