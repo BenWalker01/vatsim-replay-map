@@ -1,14 +1,15 @@
 import './App.css';
 import 'leaflet/dist/leaflet.css'; // Import Leaflet CSS
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Map as LeafletMap, TileLayer } from 'leaflet';
+import L from 'leaflet';
+import 'leaflet.heat'; // Import leaflet.heat plugin
 import ReactSlider from "react-slider";
 import Dot from './Dot';
 import { processReplayFile } from './FileUploader';
 
 const App: React.FC = () => {
     const mapRef = useRef<HTMLDivElement>(null);
-    const leafletMapRef = useRef<LeafletMap | null>(null);
+    const leafletMapRef = useRef<L.Map | null>(null);
     const [dots, setDots] = useState<Dot[]>([]);
     const [isPlaying, setIsPlaying] = useState(false);
     const [speed, setSpeed] = useState(1);
@@ -17,6 +18,7 @@ const App: React.FC = () => {
     const [planesVisible, setPlanesVisible] = useState(true);
     const [tracksVisible, setTracksVisible] = useState(false);
     const [trailsVisible, setTrailsVisible] = useState(false);
+    const [heatMapVisible, setHeatMapVisible] = useState(false);
     const [colourSettings, setColourSettings] = useState(true);
     
     // Airport filtering state
@@ -29,6 +31,8 @@ const App: React.FC = () => {
     const [altitudeFilterEnabled, setAltitudeFilterEnabled] = useState(false);
     const [debouncedAltitudeRange, setDebouncedAltitudeRange] = useState<[number, number]>([0, 45000]);
     const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const heatMapRef = useRef<any>(null); // Reference to heat map layer
+    const heatMapUpdateTimerRef = useRef<NodeJS.Timeout | null>(null);
 
     // Debounced altitude range update for performance
     const handleAltitudeRangeChange = useCallback((newRange: [number, number]) => {
@@ -114,14 +118,40 @@ const App: React.FC = () => {
 
     useEffect(() => {
         if (mapRef.current && !leafletMapRef.current) {
-            leafletMapRef.current = new LeafletMap(mapRef.current).setView([55.3781, -3.436], 6);
+            leafletMapRef.current = new L.Map(mapRef.current).setView([55.3781, -3.436], 6);
 
-            new TileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            new L.TileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             }).addTo(leafletMapRef.current);
         }
     }, []);
 
+    // Function to update heat map data
+    const updateHeatMap = useCallback(() => {
+        if (!leafletMapRef.current || !heatMapVisible || dots.length === 0) return;
+
+        // Collect positions from visible aircraft
+        const heatMapData: [number, number, number][] = [];
+        
+        dots.forEach(dot => {
+            const airportMatch = !airportFilterEnabled || dot.matchesAirportFilter(airportFilter, filterType);
+            const altitudeMatch = !altitudeFilterEnabled || dot.isWithinAltitudeRange(debouncedAltitudeRange[0], debouncedAltitudeRange[1]);
+            const shouldShow = airportMatch && altitudeMatch;
+            
+            if (shouldShow) {
+                const position = dot.getCurrentPosition();
+                if (position) {
+                    // Add position with intensity (lat, lng, intensity)
+                    heatMapData.push([position.lat, position.lng, 1]);
+                }
+            }
+        });
+
+        // Update existing heat map data
+        if (heatMapRef.current && heatMapData.length > 0) {
+            heatMapRef.current.setLatLngs(heatMapData);
+        }
+    }, [heatMapVisible, dots, airportFilterEnabled, airportFilter, filterType, altitudeFilterEnabled, debouncedAltitudeRange]);
 
     // Control playback based on UI
     useEffect(() => {
@@ -134,7 +164,20 @@ const App: React.FC = () => {
                 dot.stopAnimation();
             }
         });
-    }, [isPlaying, speed, dots]);
+        
+        // Set up periodic heat map updates when playing
+        if (isPlaying && heatMapVisible) {
+            heatMapUpdateTimerRef.current = setInterval(() => {
+                updateHeatMap();
+            }, 1000); // Update every second
+        } else {
+            // Clear heat map update timer
+            if (heatMapUpdateTimerRef.current) {
+                clearInterval(heatMapUpdateTimerRef.current);
+                heatMapUpdateTimerRef.current = null;
+            }
+        }
+    }, [isPlaying, speed, dots, heatMapVisible, updateHeatMap]);
 
     // Apply all filtering (airport, altitude) and visibility controls
     useEffect(() => {
@@ -165,6 +208,55 @@ const App: React.FC = () => {
             }
         });
     }, [airportFilterEnabled, airportFilter, filterType, altitudeFilterEnabled, debouncedAltitudeRange, dots, planesVisible, tracksVisible, trailsVisible]);
+
+    // Heat map update logic
+    useEffect(() => {
+        if (!leafletMapRef.current) return;
+
+        // Remove existing heat map
+        if (heatMapRef.current) {
+            leafletMapRef.current.removeLayer(heatMapRef.current);
+            heatMapRef.current = null;
+        }
+
+        // Create new heat map if enabled and we have visible aircraft
+        if (heatMapVisible && dots.length > 0) {
+            // Collect positions from visible aircraft
+            const heatMapData: [number, number, number][] = [];
+            
+            dots.forEach(dot => {
+                const airportMatch = !airportFilterEnabled || dot.matchesAirportFilter(airportFilter, filterType);
+                const altitudeMatch = !altitudeFilterEnabled || dot.isWithinAltitudeRange(debouncedAltitudeRange[0], debouncedAltitudeRange[1]);
+                const shouldShow = airportMatch && altitudeMatch;
+                
+                if (shouldShow) {
+                    const position = dot.getCurrentPosition();
+                    if (position) {
+                        // Add position with intensity (lat, lng, intensity)
+                        heatMapData.push([position.lat, position.lng, 1]);
+                    }
+                }
+            });
+
+            // Create heat map layer if we have data
+            if (heatMapData.length > 0) {
+                heatMapRef.current = (L as any).heatLayer(heatMapData, {
+                    radius: 25,
+                    blur: 15,
+                    maxZoom: 18,
+                    max: 1.0,
+                    gradient: {
+                        0.0: 'blue',
+                        0.2: 'cyan',
+                        0.4: 'lime',
+                        0.6: 'yellow',
+                        0.8: 'orange',
+                        1.0: 'red'
+                    }
+                }).addTo(leafletMapRef.current);
+            }
+        }
+    }, [heatMapVisible, dots, airportFilterEnabled, airportFilter, filterType, altitudeFilterEnabled, debouncedAltitudeRange]);
 
     useEffect(() => {
         return () => {
@@ -276,6 +368,18 @@ const App: React.FC = () => {
                                 }}
                             />
                             Display Trails
+                        </label>
+
+                        <label className="checkbox-label">
+                            <input
+                                type="checkbox"
+                                checked={heatMapVisible}
+                                onChange={() => {
+                                    const newVisibility = !heatMapVisible;
+                                    setHeatMapVisible(newVisibility);
+                                }}
+                            />
+                            Display Heat Map
                         </label>
 
                         <label className="checkbox-label">

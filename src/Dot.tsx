@@ -183,8 +183,8 @@ class Dot {
     private addTrailPoint(position: L.LatLngExpression): void {
         const latLng = L.latLng(position as any);
         
-        // Calculate speed and adjust trail length (simplified for performance)
-        let dynamicTrailLength = this.maxTrailPoints;
+        // Calculate speed and adjust trail length with non-linear scaling
+        let dynamicTrailLength = 8; // Default trail length
         if (this.trailPoints.length > 0) {
             const lastPoint = this.trailPoints[this.trailPoints.length - 1];
             const distance = lastPoint.distanceTo(latLng); // meters
@@ -194,16 +194,27 @@ class Dot {
                 return;
             }
             
-            // Calculate speed-based trail length (simplified)
+            // Calculate speed-based trail length with inverse relationship
             const speed = distance * 1.5; // Rough speed factor
-            const speedFactor = Math.min(speed / 800, 1); // Normalize speed
-            dynamicTrailLength = Math.round(3 + (6 * speedFactor)); // 3-9 points max
+            
+            // Non-linear scaling: slower speeds get longer trails, faster speeds get shorter trails
+            // Using inverse square root for smooth non-linear relationship
+            const normalizedSpeed = Math.min(speed / 1000, 1); // Normalize speed (0-1)
+            
+            // Inverse relationship: high speed = short trail, low speed = long trail
+            // Using 1 - sqrt(speed) for smoother curve
+            const speedFactor = 1 - Math.sqrt(normalizedSpeed);
+            
+            // Trail length: 5 points (fast) to 12 points (slow/stationary)
+            const minLength = 5;  // Minimum for fast aircraft
+            const maxLength = 12; // Maximum for slow aircraft
+            dynamicTrailLength = Math.round(minLength + (maxLength - minLength) * speedFactor);
         }
         
         // Add new point
         this.trailPoints.push(latLng);
         
-        // Limit trail length based on speed (much shorter for performance)
+        // Limit trail length based on speed (non-linear relationship)
         while (this.trailPoints.length > dynamicTrailLength) {
             this.trailPoints.shift(); // Remove oldest point
         }
@@ -532,6 +543,19 @@ class Dot {
         }
         
         return this;
+    }
+
+    /**
+     * Get the current position of the aircraft
+     */
+    public getCurrentPosition(): { lat: number; lng: number } | null {
+        if (!this.marker) return null;
+        
+        const latLng = this.marker.getLatLng();
+        return {
+            lat: latLng.lat,
+            lng: latLng.lng
+        };
     }
 
     public remove(): this {
